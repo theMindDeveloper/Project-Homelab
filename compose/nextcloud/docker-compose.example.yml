@@ -1,0 +1,123 @@
+# ---------------------------------------------------------------------------
+#  Nextcloud - files, sync and sharing
+#  Target host: LXC on P2 (pve2)      Status: PLANNED, not yet deployed
+#  Runbook: runbooks/07-nextcloud.md
+#
+#  Four containers, and every one of them earns its place:
+#
+#    db     PostgreSQL. Nextcloud ships with SQLite as the default and it
+#           falls over on any real number of files. MariaDB also works;
+#           PostgreSQL is chosen here because the Nextcloud project tests
+#           it hardest and because a `pg_dump` is a clean, restorable file.
+#
+#    redis  File locking and session cache. Without it, Nextcloud uses
+#           database-backed locking and you get "file is locked" errors that
+#           need manual unlocking. It is not optional in practice.
+#
+#    app    The Nextcloud PHP-FPM/Apache image itself.
+#
+#    cron   Nextcloud has background jobs (previews, file scans, cleanups).
+#           The default AJAX cron only runs when someone loads a page, so on
+#           a lightly used instance the jobs never run. This container runs
+#           them properly every five minutes.
+#
+#  TLS is NOT terminated here. Nginx Proxy Manager does that, which is why
+#  the app publishes plain HTTP on a high port and trusts the proxy below.
+# ---------------------------------------------------------------------------
+services:
+
+  db:
+    image: postgres:16-alpine
+    container_name: nextcloud-db
+    restart: unless-stopped
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [nextcloud]
+    security_opt:
+      - no-new-privileges:true
+
+  redis:
+    image: redis:7-alpine
+    container_name: nextcloud-redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [nextcloud]
+    security_opt:
+      - no-new-privileges:true
+
+  app:
+    image: nextcloud:29-apache
+    container_name: nextcloud-app
+    restart: unless-stopped
+    depends_on:
+      db:    {condition: service_healthy}
+      redis: {condition: service_healthy}
+    ports:
+      - "8082:80"
+    volumes:
+      # /var/www/html holds the application, config and apps.
+      - nextcloud_html:/var/www/html
+      # User data is a separate bind mount so it can live on the big disk and
+      # be backed up on a different schedule from the application.
+      - ${NEXTCLOUD_DATA_DIR}:/var/www/html/data
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - REDIS_HOST=redis
+      - REDIS_HOST_PASSWORD=${REDIS_PASSWORD}
+      - NEXTCLOUD_ADMIN_USER=${NEXTCLOUD_ADMIN_USER}
+      - NEXTCLOUD_ADMIN_PASSWORD=${NEXTCLOUD_ADMIN_PASSWORD}
+      # Nextcloud rejects any request whose Host header is not in this list.
+      # Getting it wrong produces "Access through untrusted domain", which is
+      # the single most common first-boot problem behind a reverse proxy.
+      - NEXTCLOUD_TRUSTED_DOMAINS=${NEXTCLOUD_TRUSTED_DOMAINS}
+      # Without these, every generated URL uses the container's own address
+      # and http, so login redirects and share links break.
+      - OVERWRITEPROTOCOL=https
+      - OVERWRITECLIURL=${NEXTCLOUD_URL}
+      # The proxy's address. Nextcloud will only believe X-Forwarded-For
+      # from a host in this list, which is what stops header spoofing.
+      - TRUSTED_PROXIES=${TRUSTED_PROXIES}
+      - PHP_MEMORY_LIMIT=1G
+      - PHP_UPLOAD_LIMIT=16G
+      - TZ=Europe/Berlin
+    networks: [nextcloud]
+
+  cron:
+    image: nextcloud:29-apache
+    container_name: nextcloud-cron
+    restart: unless-stopped
+    depends_on:
+      - app
+    volumes:
+      - nextcloud_html:/var/www/html
+      - ${NEXTCLOUD_DATA_DIR}:/var/www/html/data
+    entrypoint: /cron.sh
+    networks: [nextcloud]
+
+networks:
+  nextcloud:
+    driver: bridge
+
+volumes:
+  db_data:
+  redis_data:
+  nextcloud_html:

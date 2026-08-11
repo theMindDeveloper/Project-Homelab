@@ -1,0 +1,212 @@
+# ---------------------------------------------------------------------------
+#  Glance - dashboard configuration
+#
+#  This is the LIVE configuration from LXC 102, published verbatim. It contains
+#  no credentials of any kind: every value in it is a private RFC1918 address
+#  or a hostname that is already public in Certificate Transparency logs.
+#  That is why it ships as the real file rather than a redacted one - see
+#  docs/99-security-notes.md.
+#
+#  Rendered result: assets/screenshots/glance-dashboard.png
+#
+#  The design rule behind the layout: this page exists to answer ONE question,
+#  "is anything red", in about one second, from a phone. That is a lower bar
+#  than a Grafana dashboard and it is why this page actually gets opened.
+#
+#  Copy to glance.yml, change the hostnames and addresses, restart the
+#  container. The config is a read-only bind mount, so a restart is required;
+#  Glance does not reload it in place.
+# check with : docker cp glance:/app/config/glance.yml /tmp/glance.yml && cat /tmp/glance.yml
+# ---------------------------------------------------------------------------
+
+pages:
+  - name: Homelab
+    width: wide
+    columns:
+      - size: full
+        widgets:
+          - type: calendar
+            first-day-of-week: monday
+
+          # Two monitor groups side by side. split-column keeps them on one row
+          # on a wide screen and stacks them on a phone, which is the screen
+          # this page is actually read on.
+          - type: split-column
+            max-columns: 2
+            widgets:
+
+              - type: monitor
+                title: Management
+                cache: 1m
+                sites:
+                  # NOTE the pattern used throughout: `url` is where clicking
+                  # the tile takes you (the friendly name, through the reverse
+                  # proxy). `check-url` is what Glance actually probes - the
+                  # service directly, by address and port.
+                  #
+                  # Splitting them means a red tile says "the service is down",
+                  # not "the service is down OR DNS is broken OR the proxy is
+                  # down OR the certificate expired". A health check that can
+                  # fail for four unrelated reasons tells you nothing.
+                  - title: Vaultwarden
+                    url: https://vault.theminddev.com/
+                    check-url: http://192.168.178.87:8081/alive
+                    icon: "si:vaultwarden"
+                    timeout: 5s
+                  - title: Jellyfin
+                    url: https://jelly.theminddev.com/web/#/home
+                    check-url: http://192.168.178.49:8096/health
+                    icon: "si:jellyfin"
+                    timeout: 5s
+                  - title: "NPM"
+                    url: https://npm.theminddev.com
+                    check-url: http://192.168.178.178:81
+                    icon: "si:nginxproxymanager"
+                    # NPM's admin UI answers 401 when you are not logged in,
+                    # which is a perfectly healthy response. Without this the
+                    # tile is permanently red, and a dashboard with a
+                    # permanently red tile trains you to ignore red tiles.
+                    alt-status-codes: [301, 302, 303, 307, 308, 401, 403]
+                  - title: "Grafana"
+                    url: https://grafana.theminddev.com
+                    # A real health endpoint, not the login page. This returns
+                    # 200 only if Grafana can also reach its database.
+                    check-url: http://192.168.178.87:3000/api/health
+                    icon: "si:grafana"
+                  - title: "Prometheus"
+                    url: https://prom.theminddev.com
+                    check-url: http://192.168.178.87:9090/-/ready
+                    icon: "si:prometheus"
+                  - title: "Portainer 0"
+                    url: https://port0.theminddev.com
+                    check-url: https://192.168.178.178:9442/api/status
+                    icon: "si:portainer"
+                    # Portainer serves its own self-signed certificate on 9443.
+                    allow-insecure: true
+                  - title: "Portainer 1"
+                    url: https://port1.theminddev.com
+                    check-url: https://192.168.178.87:9443/api/status
+                    icon: "si:portainer"
+                    allow-insecure: true
+
+              - type: monitor
+                title: Applications
+                cache: 1m
+                sites:
+                  - title: "AdGuard"
+                    url: https://adguard.theminddev.com
+                    check-url: http://192.168.178.178:8000
+                    icon: "si:adguard"
+                  - title: "AMP"
+                    url: https://amp.theminddev.com
+                    check-url: http://192.168.178.32:8080
+                    icon: "mdi:server"
+                  - title: "CasaOS"
+                    url: https://casa.theminddev.com
+                    check-url: http://192.168.178.59:90
+                    icon: "mdi:server"
+                    alt-status-codes: [301, 302, 303, 307, 308, 401, 403]
+                  - title: "Pterodactyl"
+                    url: http://192.168.178.84
+                    check-url: http://192.168.178.84:80
+                    icon: "mdi:gamepad-variant"
+                    alt-status-codes: [301, 302, 303, 307, 308, 401, 403]
+
+          # The three cluster nodes. A red tile here means the node is down or
+          # has lost quorum; `pvecm status` on any surviving node says which.
+          - type: monitor
+            title: Hardware
+            cache: 1m
+            sites:
+              - title: "P1"
+                url: https://p1.theminddev.com
+                check-url: https://192.168.178.20:8006/
+                icon: "si:proxmox"
+                allow-insecure: true
+              - title: "P2"
+                url: https://p2.theminddev.com
+                check-url: https://192.168.178.50:8006/
+                icon: "si:proxmox"
+                allow-insecure: true
+              - title: "P3"
+                url: https://p3.theminddev.com
+                check-url: https://192.168.178.77:8006/
+                icon: "si:proxmox"
+                allow-insecure: true
+
+          - type: bookmarks
+            title: DietPi
+            groups:
+              - hide-arrow: true
+                links:
+                  - title: DietPi
+                    description: 192.168.178.178
+                    url: "#"
+                    icon: "si:raspberrypi"
+
+          # Bookmarks, not monitors: these exist to be clicked, and the raw
+          # address is printed under every entry on purpose. The moment DNS
+          # breaks is the moment you need the IP, and that is exactly the
+          # moment a page full of friendly names becomes useless.
+          #
+          # Which is also why this page should be bookmarked by ADDRESS
+          # (http://192.168.178.87:8080), not by name.
+          - type: bookmarks
+            title: Service addresses
+            groups:
+              - title: Management
+                links:
+                  - title: NPM
+                    description: npm.theminddev.com
+                    url: https://npm.theminddev.com
+                  - title: Grafana
+                    description: grafana.theminddev.com
+                    url: https://grafana.theminddev.com
+                  - title: Prometheus
+                    description: prom.theminddev.com
+                    url: https://prom.theminddev.com
+                  - title: Portainer 0
+                    description: port0.theminddev.com
+                    url: https://port0.theminddev.com
+                  - title: Portainer 1
+                    description: port1.theminddev.com
+                    url: https://port1.theminddev.com
+              - title: Applications
+                links:
+                  - title: AdGuard
+                    description: adguard.theminddev.com
+                    url: https://adguard.theminddev.com
+                  - title: AMP
+                    description: amp.theminddev.com
+                    url: https://amp.theminddev.com
+                  - title: CasaOS
+                    description: casa.theminddev.com
+                    url: https://casa.theminddev.com
+                  - title: Pterodactyl
+                    description: 192.168.178.84
+                    url: http://192.168.178.84
+              - title: Hardware
+                links:
+                  - title: P1
+                    description: p1.theminddev.com
+                    url: https://p1.theminddev.com
+                  - title: P2
+                    description: p2.theminddev.com
+                    url: https://p2.theminddev.com
+                  - title: P3
+                    description: p3.theminddev.com
+                    url: https://p3.theminddev.com
+                  - title: DietPi
+                    description: 192.168.178.178
+                    url: "#"
+                    hide-arrow: true
+
+# ---------------------------------------------------------------------------
+#  Widgets deliberately NOT in this file
+#
+#  `dns-stats` against AdGuard, and `server-stats` against a remote agent,
+#  both need credentials. The moment a credential enters this file it stops
+#  being publishable verbatim, which is most of its value. If they get added,
+#  they use ${VARIABLES} from a .env and this file becomes glance.example.yml
+#  in the proper sense.
+# ---------------------------------------------------------------------------

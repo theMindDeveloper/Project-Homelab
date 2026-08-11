@@ -1,0 +1,308 @@
+# ---------------------------------------------------------------------------
+#  theminddev-homelab - inventory
+#
+#  Single source of truth for hosts, guests, services and addressing.
+#  Every table in the README and every diagram label is derived from this file.
+#  If something is changed in the lab, it is changed here first.
+#
+#  WHAT IS NOT IN HERE, EVER:
+#    public IP, IPv6 host addresses, MAC addresses, WAN port forwards,
+#    the DuckDNS hostname, tunnel IDs, tokens, passwords, exact patch versions.
+#  See docs/99-security-notes.md for the rule and scripts/check-secrets.sh
+#  for the mechanism that enforces it.
+# ---------------------------------------------------------------------------
+
+meta:
+  name: theminddev-homelab
+  domain: theminddev.com
+  updated: 2026-08-11
+
+network:
+  subnet: 192.168.178.0/24
+  gateway: 192.168.178.1
+  dns: 192.168.178.178          # AdGuard Home, authoritative for the LAN
+  upstream_dns: [1.1.1.1, 9.9.9.9]
+  vlans: none                   # flat /24, deliberate - see README "Known limitations"
+  addressing: static            # DHCP is on, every lab host is pinned
+  reservations:
+    infrastructure: .1 - .19    # router, switch, APs
+    proxmox_nodes:  .20 - .79
+    appliances:     .80 - .99   # NAS, Pi, printers
+    guests:         .30 - .99   # LXC containers (historic, not contiguous)
+
+hardware:
+
+  - id: router
+    model: AVM FRITZ!Box 7590
+    role: gateway, DHCP, dynamic DNS client
+    address: 192.168.178.1
+
+  - id: switch
+    model: TP-Link TL-SG108 v3
+    role: 8-port gigabit, unmanaged
+    address: null               # unmanaged, no management plane
+
+  - id: p1
+    node: pve
+    model: Lenovo ThinkCentre M710q
+    cpu: Intel i5-7500T (4C/4T)
+    ram_gb: 32
+    disk: 94 GB ext4 (local + local-lvm)
+    address: 192.168.178.20
+    port: 8006
+    hostname: p1.theminddev.com
+    role: Proxmox VE node - carries all workload
+
+  - id: p2
+    node: pve2
+    model: Lenovo ThinkCentre M710q
+    cpu: Intel i5-7500T (4C/4T)
+    ram_gb: 32
+    disk: local + local-lvm + hdd-1tb
+    address: 192.168.178.50
+    port: 8006
+    hostname: p2.theminddev.com
+    role: Proxmox VE node - quorum vote, target for planned workload
+
+  - id: p3
+    node: pve3
+    model: Lenovo ThinkCentre M710q
+    cpu: Intel i5-7500T (4C/4T)
+    ram_gb: 32
+    disk: local + local-lvm
+    address: 192.168.178.77
+    port: 8006
+    hostname: p3.theminddev.com
+    role: Proxmox VE node - quorum vote, no guests
+
+  - id: pi
+    model: Raspberry Pi 5
+    os: DietPi
+    ram_gb: 8
+    address: 192.168.178.178
+    role: ingress (Nginx Proxy Manager) and LAN DNS (AdGuard Home)
+
+  - id: nas
+    model: UGREEN DH4300
+    os: UGOS Pro
+    address: 192.168.178.49
+    disks: 2 x 6 TB, RAID 1 mirror
+    role: media, photos, backup target, Docker host
+
+cluster:
+  name: HomelabCluster
+  nodes: [pve, pve2, pve3]
+  votes: 3
+  quorum: 2
+  guest_type: LXC only          # rationale in docs/04-lxc-vs-vm.md
+  live_migration: false         # a consequence of LXC-only
+  ha_groups: none
+
+guests:
+
+  - vmid: 101
+    name: casaos
+    node: pve
+    type: lxc
+    address: 192.168.178.59
+    ports: [90]
+    hostname: casa.theminddev.com
+    purpose: CasaOS app dashboard
+
+  - vmid: 102
+    name: docker
+    node: pve
+    type: lxc
+    address: 192.168.178.87
+    unprivileged: true
+    features: nesting=1
+    purpose: the main Docker host of the cluster
+
+  - vmid: 105
+    name: pterodactyl-wings
+    node: pve
+    type: lxc
+    address: 192.168.178.36
+    unprivileged: true
+    features: nesting=1
+    purpose: Pterodactyl daemon - runs game servers as Docker containers
+
+  - vmid: 106
+    name: pterodactyl-panel
+    node: pve
+    type: lxc
+    address: 192.168.178.84
+    ports: [80]
+    hostname: pter.theminddev.com
+    purpose: Pterodactyl web panel
+
+  - vmid: 107
+    name: amp-server
+    node: pve
+    type: lxc
+    address: 192.168.178.32
+    ports: [8080]
+    os: Ubuntu 24.04
+    purpose: CubeCoders AMP game server manager
+
+services:
+
+  # --- Raspberry Pi 5, Docker on DietPi -----------------------------------
+  - name: Nginx Proxy Manager
+    host: pi
+    runtime: docker
+    ports: {admin: 81, http: 80, https: 443}
+    hostname: npm.theminddev.com
+    exposure: lan
+    role: reverse proxy, TLS termination, Let's Encrypt DNS-01
+
+  - name: AdGuard Home
+    host: pi
+    runtime: docker
+    ports: {dns: 53, ui: 8000}
+    hostname: adguard.theminddev.com
+    exposure: lan
+    role: DNS resolver and filter for every device on the LAN
+
+  - name: Portainer 0
+    host: pi
+    runtime: docker
+    ports: {https: 9442}
+    hostname: port0.theminddev.com
+    exposure: lan
+    role: container management for the Pi
+
+  # --- LXC 102 "docker" on P1 ---------------------------------------------
+  - name: Glance
+    host: lxc-102
+    runtime: docker
+    ports: {http: 8080}
+    hostname: glance.theminddev.com
+    exposure: lan
+    role: single-pane dashboard, HTTP health checks for every service
+
+  - name: Vaultwarden
+    host: lxc-102
+    runtime: docker
+    ports: {http: 8081}
+    hostname: vault.theminddev.com
+    exposure: lan
+    role: password vault, Bitwarden-compatible
+
+  - name: Portainer 1
+    host: lxc-102
+    runtime: docker
+    ports: {https: 9443}
+    hostname: port1.theminddev.com
+    exposure: lan
+    role: container management for LXC 102
+
+  - name: Grafana
+    host: lxc-102
+    runtime: docker
+    ports: {http: 3000}
+    hostname: grafana.theminddev.com
+    exposure: lan
+    role: dashboards over Prometheus
+
+  - name: Prometheus
+    host: lxc-102
+    runtime: docker
+    ports: {http: 9090}
+    hostname: prom.theminddev.com
+    exposure: lan
+    role: metrics scraping and storage
+
+  - name: Apache
+    host: lxc-102
+    runtime: docker
+    ports: {http: 80}
+    hostname: apache.theminddev.com
+    exposure: internet          # the ONLY publicly reachable service
+    role: public static site, reached through the Cloudflare tunnel
+
+  - name: n8n
+    host: lxc-102
+    runtime: docker
+    exposure: lan
+    role: workflow automation
+    note: >
+      running in LXC 102, not on P2 as originally planned. Visible in
+      assets/screenshots/portainer-lxc102-containers.png.
+
+  - name: FTP (pure-ftpd)
+    host: lxc-102
+    runtime: docker
+    exposure: lan
+    role: file transfer for the game servers
+
+  - name: Portainer agent
+    host: lxc-102
+    runtime: docker
+    exposure: lan
+    role: lets Portainer 0 on the Pi manage this host too
+
+  - name: cloudflared
+    host: lxc-102
+    runtime: docker
+    ports: {}
+    exposure: outbound-only
+    role: Cloudflare tunnel connector - no inbound firewall rule exists for it
+
+  # --- NAS, Docker on UGOS Pro --------------------------------------------
+  - name: Jellyfin
+    host: nas
+    runtime: docker
+    ports: {http: 8096}
+    hostname: jelly.theminddev.com
+    exposure: lan
+    role: media server - lives next to the library, so no network share
+
+  - name: Immich
+    host: nas
+    runtime: docker
+    exposure: lan
+    role: photo library
+
+  - name: Syncthing
+    host: nas
+    runtime: docker
+    exposure: lan
+    role: file sync between devices
+
+# Game servers currently defined. WAN forwards and external ports are
+# deliberately absent - see docs/99-security-notes.md.
+game_servers:
+  - {name: zomboid,         manager: Pterodactyl, host: 192.168.178.36, state: running}
+  - {name: minecraft,       manager: Pterodactyl, host: 192.168.178.36, state: stopped}
+  - {name: space-engineers, manager: AMP,         host: 192.168.178.32, state: running}
+  - {name: terraria,        manager: AMP,         host: 192.168.178.32, state: stopped}
+
+external:
+  - name: Cloudflare DNS
+    role: authoritative DNS for theminddev.com
+    note: wildcard A record, DNS-only (grey cloud), points at an RFC1918 address
+
+  - name: Cloudflare Tunnel
+    role: publishes exactly one hostname
+    note: connector runs in LXC 102, outbound only
+
+  - name: DuckDNS
+    role: dynamic DNS, the router pushes the current WAN address
+    note: hostname deliberately not published - see docs/99-security-notes.md
+
+  - name: Let's Encrypt
+    role: TLS certificates
+    note: DNS-01 challenge, requested by Nginx Proxy Manager, no open port
+
+planned:
+  - {what: k3s server,        where: pve,  why: declarative workloads and rescheduling}
+  - {what: k3s agent,         where: pve2, why: worker}
+  - {what: k3s agent,         where: pve3, why: worker}
+  - {what: Nextcloud,         where: pve2, why: files and sync - runbook already written}
+  - {what: Jenkins,           where: pve2, why: CI/CD}
+  - {what: OpenStack,         where: pve3, why: private cloud lab}
+  - {what: Apache CloudStack, where: pve3, why: IaaS orchestration lab}
+  - {what: WireGuard,         where: router, why: replace the game-server port forwards}
+  - {what: Alertmanager,      where: lxc-102, why: nothing notifies me today}
+  - {what: offsite backup,    where: external, why: RAID is not a backup}

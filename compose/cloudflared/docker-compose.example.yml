@@ -1,0 +1,35 @@
+# ---------------------------------------------------------------------------
+#  cloudflared - Cloudflare Tunnel connector
+#  Host: LXC 102 "docker" (P1)
+#  Runbook: runbooks/06-cloudflare-tunnel.md
+#
+#  This is the only path from the internet into this lab that is not a port
+#  forward, and it is the reason the firewall has no inbound rule for web
+#  traffic at all.
+#
+#  How it works, in one sentence: the connector opens an OUTBOUND connection
+#  to Cloudflare's edge and keeps it open, and Cloudflare sends requests for
+#  the published hostname back down that existing connection.
+#
+#  Consequences:
+#    - no inbound firewall rule, no port forward, no exposed public IP
+#    - the origin's address is never revealed in DNS
+#    - Cloudflare terminates TLS at their edge and can see the plaintext.
+#      That is the trade being made, and it is worth stating rather than
+#      pretending the tunnel is end-to-end encrypted to the origin.
+#
+#  The token IS a credential. It authenticates this connector as the tunnel.
+#  Anyone holding it can serve traffic as this hostname. It lives in .env,
+#  which is gitignored, and it is never printed into a shell history.
+# ---------------------------------------------------------------------------
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    # No ports. Nothing listens. That is the entire security argument.
+    security_opt:
+      - no-new-privileges:true

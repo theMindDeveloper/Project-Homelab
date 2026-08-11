@@ -1,0 +1,102 @@
+# ---------------------------------------------------------------------------
+#  Prometheus scrape configuration
+#
+#  Prometheus pulls. Every target below must be reachable FROM the container
+#  this Prometheus runs in. The most common "target down" cause in a homelab
+#  is using localhost in a target, which means the Prometheus container
+#  itself, not the host.
+# ---------------------------------------------------------------------------
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    lab: theminddev-homelab
+
+# Alerting is NOT configured yet. This is a deliberate, documented gap:
+# see the "Known limitations" section of the README.
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets: ["alertmanager:9093"]
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+
+  # ---------------------------------------------------------------------
+  #  DEPLOYED: these two are live. See
+  #  assets/screenshots/prometheus-targets.png
+  # ---------------------------------------------------------------------
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # --- the Proxmox nodes themselves ---------------------------------------
+  # node_exporter installed on each node, not in a container:
+  #   apt install prometheus-node-exporter
+  - job_name: proxmox-host
+    static_configs:
+      - targets:
+          - "192.168.178.20:9100"   # P1 - live
+        # - "192.168.178.50:9100"   # P2 - exporter not installed yet
+        # - "192.168.178.77:9100"   # P3 - exporter not installed yet
+    relabel_configs:
+      - source_labels: [__address__]
+        regex: "192.168.178.20:.*"
+        target_label: node
+        replacement: pve
+      - source_labels: [__address__]
+        regex: "192.168.178.50:.*"
+        target_label: node
+        replacement: pve2
+      - source_labels: [__address__]
+        regex: "192.168.178.77:.*"
+        target_label: node
+        replacement: pve3
+
+  # ---------------------------------------------------------------------
+  #  NOT YET DEPLOYED. The exporters below are not installed, so these
+  #  targets would show DOWN. They are kept here as the plan, and the gap
+  #  is listed in the README's known limitations rather than hidden by a
+  #  config file that looks complete.
+  #
+  #  To deploy: apt install prometheus-node-exporter on P2 and P3, and on
+  #  the Pi, then uncomment. Runbook 10 has the full procedure.
+  # ---------------------------------------------------------------------
+
+  # --- the Docker LXC and the Pi ------------------------------------------
+  - job_name: hosts
+    static_configs:
+      - targets:
+          - "192.168.178.87:9100"    # LXC 102
+          - "192.168.178.178:9100"   # Raspberry Pi
+
+  - job_name: containers
+    static_configs:
+      - targets:
+          - "192.168.178.87:8085"    # cAdvisor in LXC 102
+
+  # --- Proxmox cluster metrics via the API --------------------------------
+  # Requires prometheus-pve-exporter and an API token with PVEAuditor.
+  # The token lives in the exporter's config file, never here.
+  - job_name: proxmox-api
+    metrics_path: /pve
+    params:
+      module: [default]
+      cluster: ["1"]
+      node: ["1"]
+    static_configs:
+      - targets:
+          - "192.168.178.20"
+          - "192.168.178.50"
+          - "192.168.178.77"
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: "192.168.178.87:9221"   # pve-exporter

@@ -1,0 +1,35 @@
+# ---------------------------------------------------------------------------
+#  AdGuard Home - DNS resolver and filter for every device on the LAN
+#  Host: Raspberry Pi 5 (DietPi)     Hostname: adguard.theminddev.com
+#
+#  This container answers DNS for the entire network, which has one
+#  consequence worth stating plainly: if it stops, nothing on the LAN can
+#  resolve a name. Not the internet, not the internal services, nothing.
+#  That is the price of network-wide filtering and it is why a second
+#  resolver is on the list of things to add.
+# ---------------------------------------------------------------------------
+services:
+  adguardhome:
+    image: adguard/adguardhome:latest
+    container_name: adguardhome
+    restart: unless-stopped
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "8000:80/tcp"     # web UI (3000 during initial setup)
+      - "3001:3000/tcp"   # setup wizard, only needed once
+    volumes:
+      - ./work:/opt/adguardhome/work
+      - ./conf:/opt/adguardhome/conf
+    environment:
+      - TZ=Europe/Berlin
+
+# Port 53 on the host is usually already taken by systemd-resolved.
+# On DietPi/Debian, free it before starting this container:
+#
+#   sudo mkdir -p /etc/systemd/resolved.conf.d
+#   printf '[Resolve]\nDNSStubListener=no\n' \
+#     | sudo tee /etc/systemd/resolved.conf.d/adguard.conf
+#   sudo systemctl restart systemd-resolved
+#
+# Then point the router's DHCP at this host so every client uses it.

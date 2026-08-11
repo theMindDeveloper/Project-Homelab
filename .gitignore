@@ -1,0 +1,70 @@
+# ---------------------------------------------------------------------------
+#  Secrets are excluded by CATEGORY, not by filename.
+#  Adding a new service must never require remembering to update this file.
+#  See docs/99-security-notes.md
+# ---------------------------------------------------------------------------
+
+# Environment files - the real ones. Examples are tracked explicitly below.
+.env
+.env.*
+*.env
+!.env.example
+!*.env.example
+
+# Keys, certificates, credentials
+*.key
+*.pem
+*.pfx
+*.p12
+*.crt
+*.cer
+*.kdbx
+*.jks
+id_rsa*
+id_ed25519*
+*.ppk
+known_hosts
+authorized_keys
+
+# Anything that names itself
+*secret*
+*secrets*
+*credential*
+*credentials*
+*token*
+*password*
+!docs/*token*
+!docs/*secret*
+!scripts/check-secrets.sh
+
+# Cloudflare tunnel credentials (JSON named after the tunnel UUID)
+cert.pem
+[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]-*.json
+
+# Live service configuration that contains real values.
+# Every one of these ships as a .example file instead.
+compose/**/docker-compose.yml
+compose/**/*.live.yml
+!compose/**/docker-compose.example.yml
+
+# Backups and dumps
+*.tar.zst
+*.vma.zst
+*.sql
+*.dump
+*.bak
+dump/
+
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*~
+
+# Local scratch
+tmp/
+scratch/
+NOTES.local.md

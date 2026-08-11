@@ -1,0 +1,32 @@
+# ---------------------------------------------------------------------------
+#  Apache httpd - the one publicly reachable service in this lab
+#  Host: LXC 102 "docker" (P1)     Hostname: apache.theminddev.com
+#  Reached through the Cloudflare tunnel, never directly.
+#
+#  Because this is the only container the internet can talk to, it is the
+#  only one that gets the paranoid treatment: read-only root filesystem,
+#  no new privileges, dropped capabilities, and nothing in it but static
+#  files. There is no database behind it and no PHP in it, so there is very
+#  little to attack.
+# ---------------------------------------------------------------------------
+services:
+  apache:
+    image: httpd:2.4-alpine
+    container_name: apache
+    restart: unless-stopped
+    ports:
+      # Bound to the container's LAN address only. The internet reaches this
+      # through cloudflared, which talks to it over the Docker network.
+      - "80:80"
+    volumes:
+      - ./site:/usr/local/apache2/htdocs:ro
+      - ./httpd.conf:/usr/local/apache2/conf/httpd.conf:ro
+    read_only: true
+    tmpfs:
+      - /usr/local/apache2/logs
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true

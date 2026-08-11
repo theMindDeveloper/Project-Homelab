@@ -1,0 +1,29 @@
+# ---------------------------------------------------------------------------
+#  Portainer CE - container management UI
+#  Host: LXC 102 "docker" (P1) and the Raspberry Pi
+#  Runbook: runbooks/02-portainer-on-a-new-lxc.md
+# ---------------------------------------------------------------------------
+services:
+  portainer:
+    image: portainer/portainer-ce:lts
+    container_name: portainer
+    restart: unless-stopped
+    ports:
+      # 9443 is the HTTPS UI with Portainer's own self-signed certificate.
+      # It is published so the container is reachable before Nginx Proxy
+      # Manager exists. Once NPM proxies it, this can be bound to 127.0.0.1.
+      - "9443:9443"
+    volumes:
+      # The Docker socket is what makes Portainer work, and it is also the
+      # single most dangerous mount in this whole repository: write access to
+      # /var/run/docker.sock is equivalent to root on the Docker host, because
+      # you can start a privileged container that mounts the host filesystem.
+      # It is mounted read-only here. Portainer loses some write operations
+      # and keeps the ones actually used day to day.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - portainer_data:/data
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  portainer_data:

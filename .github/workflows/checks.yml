@@ -1,0 +1,98 @@
+# ---------------------------------------------------------------------------
+#  Repository checks
+#
+#  The pre-commit hook (scripts/check-secrets.sh --install) is the first line of
+#  defence and it runs on my machine. This is the second line, and it runs on a
+#  machine I cannot forget to configure.
+#
+#  A hook is opt-in per clone. CI is not.
+# ---------------------------------------------------------------------------
+
+name: checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+
+  secrets:
+    name: no secrets in the tree
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: scan every tracked file
+        run: |
+          chmod +x scripts/check-secrets.sh
+          ./scripts/check-secrets.sh --all
+
+  shell:
+    name: shell scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: syntax
+        run: for f in scripts/*.sh; do bash -n "$f"; done
+      - name: shellcheck
+        run: shellcheck --severity=warning scripts/*.sh
+
+  yaml:
+    name: yaml parses
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: parse every yaml file
+        run: |
+          python3 - <<'PY'
+          import glob, sys, yaml
+          bad = 0
+          for f in sorted(glob.glob('**/*.yml', recursive=True) +
+                          glob.glob('**/*.yaml', recursive=True)):
+              try:
+                  yaml.safe_load(open(f))
+                  print(f"ok    {f}")
+              except Exception as e:
+                  bad += 1
+                  print(f"FAIL  {f}: {e}")
+          sys.exit(bad)
+          PY
+
+  links:
+    name: internal links resolve
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: check every relative link and image
+        run: |
+          python3 - <<'PY'
+          import os, re, sys
+          link = re.compile(r'\[[^\]]*\]\(([^)#\s]+)(?:#[^)]*)?\)')
+          img  = re.compile(r'(?:!\[[^\]]*\]\(([^)\s]+)\)|<img[^>]+src="([^"]+)")')
+          bad = []
+          for dirpath, dirnames, filenames in os.walk('.'):
+              if '.git' in dirpath:
+                  continue
+              for name in filenames:
+                  if not name.endswith('.md'):
+                      continue
+                  path = os.path.join(dirpath, name)
+                  text = open(path, encoding='utf-8').read()
+                  targets  = [m.group(1) for m in link.finditer(text)]
+                  targets += [g for m in img.finditer(text) for g in m.groups() if g]
+                  for t in targets:
+                      if t.startswith(('http://', 'https://', 'mailto:')):
+                          continue
+                      if not os.path.exists(os.path.normpath(os.path.join(dirpath, t))):
+                          bad.append((path, t))
+          for f, t in bad:
+              print(f"BROKEN  {f} -> {t}")
+          print(f"{len(bad)} broken link(s)")
+          sys.exit(1 if bad else 0)
+          PY

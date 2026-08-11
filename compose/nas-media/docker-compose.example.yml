@@ -1,0 +1,77 @@
+# ---------------------------------------------------------------------------
+#  Media and photo stack - runs on the NAS (UGREEN DH4300, UGOS Pro)
+#
+#  These live on the NAS rather than in the cluster for one concrete reason:
+#  the library is on the NAS. Running Jellyfin next to the files removes both
+#  the network share and the hardware-transcoding passthrough problem that an
+#  unprivileged LXC would have had. The reasoning is in docs/04-lxc-vs-vm.md.
+# ---------------------------------------------------------------------------
+services:
+
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    container_name: jellyfin
+    restart: unless-stopped
+    ports:
+      - "8096:8096"
+    volumes:
+      - ./jellyfin/config:/config
+      - ./jellyfin/cache:/cache
+      # Media is mounted READ-ONLY. Jellyfin has no reason to write to the
+      # library, and a media server that cannot delete your files is a media
+      # server that cannot delete your files.
+      - ${MEDIA_DIR}:/media:ro
+    environment:
+      - TZ=Europe/Berlin
+    # Hardware transcoding on the NAS iGPU, if present:
+    # devices:
+    #   - /dev/dri:/dev/dri
+
+  immich-server:
+    image: ghcr.io/immich-app/immich-server:release
+    container_name: immich-server
+    restart: unless-stopped
+    depends_on: [immich-redis, immich-db]
+    ports:
+      - "2283:2283"
+    volumes:
+      - ${PHOTOS_DIR}:/usr/src/app/upload
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - DB_HOSTNAME=immich-db
+      - DB_USERNAME=${IMMICH_DB_USER}
+      - DB_PASSWORD=${IMMICH_DB_PASSWORD}
+      - DB_DATABASE_NAME=${IMMICH_DB_NAME}
+      - REDIS_HOSTNAME=immich-redis
+
+  immich-redis:
+    image: redis:7-alpine
+    container_name: immich-redis
+    restart: unless-stopped
+
+  immich-db:
+    image: ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0
+    container_name: immich-db
+    restart: unless-stopped
+    volumes:
+      - ./immich/db:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=${IMMICH_DB_USER}
+      - POSTGRES_PASSWORD=${IMMICH_DB_PASSWORD}
+      - POSTGRES_DB=${IMMICH_DB_NAME}
+      - POSTGRES_INITDB_ARGS=--data-checksums
+
+  syncthing:
+    image: syncthing/syncthing:latest
+    container_name: syncthing
+    restart: unless-stopped
+    # Syncthing discovers peers on the LAN with broadcast, which does not
+    # cross a bridge network. Host networking is the pragmatic answer.
+    network_mode: host
+    volumes:
+      - ./syncthing/config:/var/syncthing/config
+      - ${SYNC_DIR}:/var/syncthing/data
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Berlin

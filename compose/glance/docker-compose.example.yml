@@ -1,0 +1,19 @@
+# ---------------------------------------------------------------------------
+#  Glance - the single-pane dashboard for the whole lab
+#  Host: LXC 102 "docker" (P1)   Hostname: glance.theminddev.com
+#  Config: ./glance.yml  (see glance.example.yml in this directory)
+# ---------------------------------------------------------------------------
+services:
+  glance:
+    image: glanceapp/glance:latest
+    container_name: glance
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./glance.yml:/app/config/glance.yml:ro
+      - ./assets:/app/assets:ro
+    environment:
+      - TZ=Europe/Berlin
+    security_opt:
+      - no-new-privileges:true

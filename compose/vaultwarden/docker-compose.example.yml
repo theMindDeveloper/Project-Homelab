@@ -1,0 +1,37 @@
+# ---------------------------------------------------------------------------
+#  Vaultwarden - Bitwarden-compatible password vault
+#  Host: LXC 102 "docker" (P1)   Hostname: vault.theminddev.com
+#
+#  This is the one service where a mistake is not recoverable by restoring a
+#  container: losing the data volume loses every password. It is in the
+#  backup set, and the backup has been restore-tested.
+# ---------------------------------------------------------------------------
+services:
+  vaultwarden:
+    image: vaultwarden/server:latest
+    container_name: vaultwarden
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    volumes:
+      - vaultwarden_data:/data
+    environment:
+      # Vaultwarden refuses to serve the web vault over plain HTTP from a
+      # non-localhost origin, so DOMAIN must be the https URL that Nginx
+      # Proxy Manager terminates TLS on.
+      - DOMAIN=${VW_DOMAIN}
+      # Registration is closed. This is a single-user vault; leaving signups
+      # open on a LAN service is how you find strangers in your password
+      # manager after one misconfigured port forward.
+      - SIGNUPS_ALLOWED=false
+      - INVITATIONS_ALLOWED=false
+      # The admin panel is disabled entirely. Enable it only for the minutes
+      # you need it, with a token, then disable it again.
+      - ADMIN_TOKEN=${VW_ADMIN_TOKEN}
+      - WEBSOCKET_ENABLED=true
+      - TZ=Europe/Berlin
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  vaultwarden_data:

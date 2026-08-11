@@ -1,0 +1,33 @@
+# ---------------------------------------------------------------------------
+#  Nginx Proxy Manager - reverse proxy and TLS termination for the whole lab
+#  Host: Raspberry Pi 5 (DietPi)     Hostname: npm.theminddev.com
+#  Runbook: runbooks/04-nginx-proxy-manager-vhost.md
+#
+#  Every hostname under theminddev.com resolves to this container. It holds
+#  the certificates and forwards to the real service by internal address.
+#  It is therefore both the most useful and the most single-point-of-failure
+#  container in the lab: if it stops, every friendly name stops working,
+#  even though every service is still running.
+# ---------------------------------------------------------------------------
+services:
+  npm:
+    image: jc21/nginx-proxy-manager:latest
+    container_name: npm
+    restart: unless-stopped
+    ports:
+      - "80:80"      # HTTP, used for redirects to HTTPS
+      - "443:443"    # HTTPS, every proxied host
+      - "81:81"      # the admin UI - LAN only, never forwarded from the WAN
+    volumes:
+      - ./data:/data
+      - ./letsencrypt:/etc/letsencrypt
+    environment:
+      # Certificates are issued over the DNS-01 challenge against Cloudflare,
+      # NOT over HTTP-01. That is the whole point: HTTP-01 requires port 80
+      # to be reachable from the internet, DNS-01 requires nothing inbound.
+      # The Cloudflare API token is entered in the NPM UI and stored in
+      # ./data, which is gitignored. It is never in this file.
+      - DISABLE_IPV6=true
+      - TZ=Europe/Berlin
+    security_opt:
+      - no-new-privileges:true
