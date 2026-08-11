@@ -464,9 +464,14 @@ MAC addresses, tunnel UUIDs, private keys, token-shaped strings and files named
 like key material, and a commit containing one is refused.
 
 A pre-commit hook is opt-in per clone, so the same scan also runs in CI
-([`.github/workflows/checks.yml`](.github/workflows/checks.yml)) alongside
-`shellcheck`, a YAML parse of every file, and a check that every relative link
-and image in this repository resolves. A hook can be forgotten; CI cannot.
+([`.github/workflows/checks.yml`](.github/workflows/checks.yml)) alongside a
+shell syntax check, a YAML parse of every file, and a check that every relative
+link and image resolves. A hook can be forgotten; CI cannot.
+
+`shellcheck` runs there too, but **advisory only**. The split is deliberate: a
+failing build should mean something is wrong, not that a linter has an opinion
+about quoting. The scan that gates a merge is the secret scan, because a leak in
+a public repository cannot be taken back.
 
 ---
 

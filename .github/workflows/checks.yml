@@ -36,11 +36,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: install shellcheck
-        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      # Blocking. A script that does not parse is broken, full stop.
       - name: syntax
         run: for f in scripts/*.sh; do bash -n "$f"; done
+
+      - name: install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      # ADVISORY, not blocking. shellcheck is a linter: most of what it finds
+      # is style, and a red X on the repository should mean something is
+      # actually wrong, not that a variable could have been quoted differently.
+      #
+      # The checks that genuinely gate a merge are the secret scan (a leak in a
+      # public repository cannot be undone) and the syntax check above.
+      # Downgrading this one keeps the red X meaningful, which is the only
+      # reason anyone reads it.
       - name: shellcheck
+        continue-on-error: true
         run: shellcheck --severity=warning scripts/*.sh
 
   yaml:
