@@ -96,11 +96,6 @@ resolver for every device on the network.
 `HomelabCluster`, three corosync votes, two needed for quorum. One node can fail
 or be taken down for maintenance without the cluster losing `/etc/pve`.
 
-**All guests are LXC containers. There is not a single VM.** The consequence is
-that there is no live migration: a container is stopped and restarted on the
-target node. The reasoning, and the point at which that rule will have to be
-revisited, is in [`docs/04-lxc-vs-vm.md`](docs/04-lxc-vs-vm.md).
-
 <br clear="right">
 
 ---
@@ -110,8 +105,8 @@ revisited, is in [`docs/04-lxc-vs-vm.md`](docs/04-lxc-vs-vm.md).
 <img src="assets/screenshots/glance-dashboard.png" alt="Glance dashboard showing health checks for every service, the three cluster nodes, and service addresses">
 
 *The dashboard at [`compose/glance/glance.example.yml`](compose/glance/glance.example.yml).
-It answers one question — is anything red — which is why it gets looked at, and
-why it sits alongside Grafana rather than being replaced by it.*
+It answers one question — is anything red — which is why it gets looked at
+*
 
 ### Ingress
 
@@ -159,10 +154,7 @@ the lab.
 | Apache | 80 | `apache.` | **internet, via tunnel** |
 | cloudflared | — | — | outbound only |
 
-*This is also where the repository and reality disagreed, and the repository
-lost: n8n was written down as planned for P2 and is in fact running here. The
-inventory has been corrected. That is what happens when documentation is
-checked against a screenshot rather than against memory.*
+
 
 ### DNS
 
