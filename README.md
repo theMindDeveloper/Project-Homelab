@@ -26,23 +26,19 @@ documented so the whole thing can be rebuilt from this repository alone.**
 
 ---
 
-## Why this repository exists
+## What this repository contains
 
-Three reasons, in order of honesty.
+Complete operational documentation for the infrastructure described below.
+The design goal is that the lab could be rebuilt from this repository alone.
 
-**It is my operational memory.** When a container dies at 2 a.m. or a node has
-to be rebuilt, I do not want to reconstruct from browser history what I did
-eight months ago. Every runbook here is written for me, first, on a bad day.
-
-**It is where the concepts became concrete.** Virtualisation, containerisation,
-clustering and quorum, reverse proxying, DNS, certificate issuance, backups and
-monitoring stop being lecture slides once you have broken them yourself at home
-and had to fix them before anyone noticed.
-
-**It is a reference I keep needing.** The difference between an LXC container
-and a Docker container. Why `pct enter` exists and `qm enter` does not. Which
-`vzdump` mode costs downtime. That material is in [`docs/`](docs/), written the
-way I wish it had been explained to me.
+| | Contents |
+|---|---|
+| **[`docs/`](docs/)** | A 13-page technical reference: Docker, Docker Compose, LXC versus VM, Proxmox, storage and thin provisioning, networking, DNS and TLS, backup and recovery, monitoring, Linux administration, troubleshooting and hardening. |
+| **[`runbooks/`](runbooks/)** | 11 step-by-step procedures, each with prerequisites, verification and rollback: creating containers, deploying services, cluster operations, backup restore drills and full disaster recovery. |
+| **[`compose/`](compose/)** | 11 Docker Compose stacks covering every containerised service, published as templates with credentials externalised. |
+| **[`scripts/`](scripts/)** | Operational tooling: container provisioning, Docker installation, backup automation, health checking, and a secret scanner that runs pre-commit and in CI. |
+| **[`diagrams/`](diagrams/)** | The full architecture diagram, with editable draw.io source. |
+| **[`inventory/`](inventory/inventory.yml)** | A machine-readable inventory of every host, guest, service and address — the single source of truth from which the tables in this README are derived. |
 
 ---
 
@@ -53,23 +49,69 @@ way I wish it had been explained to me.
 
 *Editable source: [`diagrams/homelab.drawio`](diagrams/homelab.drawio)*
 
-### How a request reaches a service
+The lab is built in four layers, each with a defined responsibility.
 
-**From inside the LAN.** `grafana.theminddev.com` resolves through a public
-wildcard `A` record to `192.168.178.178`, the reverse proxy on the Raspberry Pi.
-The record is set to *DNS only* in Cloudflare, so the address handed out is an
-RFC1918 address: routable on the LAN, useless from outside. Nginx Proxy Manager
-terminates TLS with a real Let's Encrypt certificate, issued over the DNS-01
-challenge, and forwards to the service.
+### 1 · Compute — a three-node Proxmox VE cluster
 
-**No inbound port is open for any of this**, not even for certificate renewal.
+Three ThinkCentre M710q nodes form `HomelabCluster`: 12 cores and 96 GB of RAM
+under a single management plane, with corosync providing three votes and a
+quorum of two. One node can fail or be taken down for maintenance without the
+cluster losing its configuration filesystem.
 
-**From the internet.** Exactly one hostname is published,
-`apache.theminddev.com`, through a Cloudflare tunnel. `cloudflared` runs in
-LXC 102 and opens an *outbound* connection to Cloudflare, so there is no inbound
-firewall rule at all.
+Every workload runs in an **unprivileged LXC container** rather than a virtual
+machine. Containers share the host kernel, which gives sub-second start times
+and memory consumption proportional to actual use instead of allocation. The
+cost is that they cannot be live-migrated, and that trade-off is documented
+rather than omitted.
 
-The full path, the headers that break things, and the diagnostic order are in
+Docker runs *inside* those containers, giving two distinct layers: the LXC
+container is the machine, with an address and a lifetime measured in years; the
+Docker containers inside it are the applications, replaced whenever a new image
+is published.
+
+### 2 · Ingress — a single point of entry
+
+A Raspberry Pi 5 runs Nginx Proxy Manager, which terminates TLS for all 16
+internal hostnames using one Let's Encrypt wildcard certificate and routes each
+request to the correct backend by `Host` header. Every service is therefore
+reachable by name and over HTTPS, without any service needing to implement TLS
+itself.
+
+Certificates are issued over the **DNS-01 challenge**, which proves domain
+ownership through a DNS record rather than an HTTP request. As a result, no
+inbound port is open for issuance or renewal.
+
+### 3 · Storage — a NAS beside the data
+
+A UGREEN DH4300 with two 6 TB disks in RAID 1 holds media, photographs and
+backup archives. Jellyfin, Immich and Syncthing run on the NAS rather than in
+the cluster, placing the applications next to the data they serve and removing
+both a network share and a hardware-passthrough problem.
+
+### 4 · External services
+
+Cloudflare provides authoritative DNS for the domain and the tunnel through
+which exactly one service is published to the internet. AdGuard Home, also on
+the Raspberry Pi, is the resolver for every device on the network.
+
+---
+
+### The security property this produces
+
+Internal hostnames resolve **publicly** to an RFC1918 address. Anyone on the
+internet can look up `grafana.theminddev.com` and receive `192.168.178.178` —
+an address that is not routable across the internet. The name resolves
+worldwide and the service is reachable only from the LAN.
+
+Exactly one hostname is published externally, through a Cloudflare tunnel in
+which the connector establishes an **outbound** connection and receives requests
+over it. There is no inbound firewall rule for it, and no port forward.
+
+The exception is the game servers, which use conventional port forwards. That is
+the weakest element of the design, and replacing it is the next planned change.
+
+Full request paths, the proxy headers that commonly break applications, and the
+diagnostic procedure are in
 [`docs/05-networking-dns-tls.md`](docs/05-networking-dns-tls.md).
 
 ---
@@ -305,40 +347,6 @@ asked for.
 one thing. It goes from an empty Proxmox node to a service in a browser with a
 real certificate, and every other service here is the same six steps with a
 different compose file.
-
----
-
-## Nextcloud
-
-Called out separately because it is the piece of this lab that is fully designed
-and not yet running, and the honesty about that is the point.
-
-[`runbooks/07-nextcloud.md`](runbooks/07-nextcloud.md) is a complete deployment
-plan for P2: four containers (app, PostgreSQL, Redis, a dedicated cron runner),
-the reverse-proxy configuration that determines whether it works at all, and the
-post-install steps that decide whether it is still usable at 500 GB.
-
-The decisions it documents:
-
-- **PostgreSQL over MariaDB** — hardest-tested by upstream, `pg_dump` gives a
-  clean restorable file, avoids the `utf8mb4` migration MariaDB instances hit
-  years later
-- **Redis is not optional in practice** — it is documented as optional, and
-  every instance without it eventually produces file-locking errors needing
-  manual database intervention
-- **A separate cron container** — the default AJAX cron only fires when someone
-  loads a page, so on a lightly used instance the background jobs silently never
-  run
-- **`TRUSTED_PROXIES` scoped to exactly the proxy** — too broad and a client can
-  spoof its own address; unset and every log line and rate limit sees the proxy
-- **Indices and `bigint` conversion before the instance grows**, not after
-
-The compose file is
-[`compose/nextcloud/docker-compose.example.yml`](compose/nextcloud/docker-compose.example.yml),
-with the reasoning for each of the four containers written into it.
-
-When it is running on P2, the status header comes off that page and its
-expectations become observations.
 
 ---
 
