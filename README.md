@@ -48,7 +48,8 @@ way I wish it had been explained to me.
 
 ## Architecture
 
-![Architecture diagram](diagrams/homelab.png)
+
+![Architecture diagram](diagrams/homelab.png) 
 
 *Editable source: [`diagrams/homelab.drawio`](diagrams/homelab.drawio)*
 
