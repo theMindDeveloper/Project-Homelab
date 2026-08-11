@@ -33,6 +33,18 @@ authorized_keys
 *credentials*
 *token*
 *password*
+
+# ...except the scanner's own files, which are TOOLING, not secrets.
+#
+# The rules above are broad on purpose, and a broad rule catches its own
+# infrastructure: `*secrets*` matched `.secretsallow`, the allowlist that tells
+# check-secrets.sh which strings are known-safe. It was therefore never
+# committed. Every local run passed, because the file exists on disk; CI checked
+# out a tree without it and flagged Cloudflare's public resolver in the wiki.
+#
+# Anything the scanner needs to do its job must be re-included here explicitly.
+!.secretsallow
+!scripts/check-secrets.sh
 !docs/*token*
 !docs/*secret*
 !scripts/check-secrets.sh

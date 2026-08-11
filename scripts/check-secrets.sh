@@ -200,6 +200,30 @@ if [[ "$MODE" == "install" ]]; then
   exit 0
 fi
 
+# --- report the allowlist, loudly -------------------------------------------
+# This scanner is only as good as the file that tells it what is known-safe.
+# When that file is absent the scan does not fail, it gets NOISIER, which is
+# indistinguishable from the scanner working until you read the findings.
+#
+# That is not hypothetical: `.gitignore` once matched `.secretsallow` with
+# `*secrets*`, so the allowlist was never committed. Local runs were clean and
+# CI failed on 1.1.1.1. Both conditions below would have caught it in one line.
+if [[ -f "$ALLOWFILE" ]]; then
+  allow_count="$(grep -cv -e '^\s*#' -e '^\s*$' "$ALLOWFILE" 2>/dev/null || echo 0)"
+  echo "${DIM}allowlist: .secretsallow, ${allow_count} entries${OFF}"
+
+  # Present on disk but not tracked by git means CI will run without it.
+  if git rev-parse --git-dir >/dev/null 2>&1 \
+     && ! git ls-files --error-unmatch "$ALLOWFILE" >/dev/null 2>&1; then
+    echo "${YEL}WARNING: .secretsallow exists locally but is NOT tracked by git.${OFF}"
+    echo "${YEL}         CI will scan without it and report false findings.${OFF}"
+    echo "${YEL}         Fix: git add -f .secretsallow${OFF}"
+  fi
+else
+  echo "${YEL}WARNING: no .secretsallow found at ${ALLOWFILE}${OFF}"
+  echo "${YEL}         Every known-safe value will be reported as a finding.${OFF}"
+fi
+
 echo "${DIM}scanning ($MODE) ...${OFF}"
 
 if [[ "$MODE" == "all" ]]; then
