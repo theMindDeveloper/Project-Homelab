@@ -64,16 +64,47 @@ density, boot time, memory, and how quickly you can throw one away and rebuild.
 | LXC 106 `panel` | LXC | plain web app plus database |
 | LXC 105 `wings` | LXC | runs Docker itself, so it needs `nesting=1` |
 | LXC 107 `amp-server` | LXC | game server manager, Linux only |
+| **VM 200 `opnsense`** | **VM** | **rules 1 and 5 together, see below** |
 
-**Everything is an LXC container. There is not a single VM in the cluster.**
-That is a deliberate choice and it has one visible cost: no live migration.
-Moving a workload to another node means stopping it and starting it there.
+**Everything is an LXC container except the firewall.** That is a deliberate
+choice and it has one visible cost: no live migration. Moving a workload to
+another node means stopping it and starting it there.
+
+### The one VM, and why the rule bent
+
+Until August 2026 there was not a single VM in the cluster. The DMZ migration
+changed that, and it is worth recording *why*, because it is a clean example of
+the decision rule doing its job rather than being overridden.
+
+**Rule 1 alone was sufficient.** OPNsense is FreeBSD. An LXC container borrows
+the host's Linux kernel, and `pf` is a FreeBSD kernel feature. There is no
+configuration that makes a FreeBSD kernel feature run on a Linux kernel. This is
+not a hard case; it is what "shares the host kernel" means.
+
+**Rule 5 says the same thing independently.** A firewall whose entire job is to
+contain a compromised, internet-facing guest should not itself be a container
+borrowing the very kernel it is protecting against. Even if OPNsense had been
+Linux, a VM would have been the right answer.
+
+Two independent rules pointing the same way is the signal that the exception is
+real rather than convenient. Cost: 2 GB of RAM and a 20 GB disk on pve2.
+
+Reasoning in full: [`17-opnsense-concepts.md`](17-opnsense-concepts.md).
+Build: [runbook 13](../runbooks/13-install-the-opnsense-vm.md).
 
 Jellyfin is the interesting case. It would have been the strongest candidate for
 a VM, because hardware transcoding on the integrated Intel HD 630 is far easier
 to pass through cleanly to a VM than into an unprivileged container. It ended up
 somewhere else entirely: as a Docker container on the NAS, right next to the
 media library, which removes both the passthrough problem and the network share.
+
+The other thing worth noting about that table: LXC 105, 106 and 107 all now live
+in a sealed network segment with no route to the house LAN, which is a different
+kind of isolation from the container-versus-VM question and is complementary to
+it. Containers isolate *processes from the kernel*; segmentation isolates
+*machines from each other*. Getting the second one right is what made the first
+one's weaker isolation acceptable for internet-facing workloads. See
+[`12-network-segmentation.md`](12-network-segmentation.md).
 
 The open question this raises is k3s. Running it on all three nodes is planned,
 and k3s inside an unprivileged LXC needs cgroup delegation and kernel module

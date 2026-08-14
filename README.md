@@ -33,17 +33,30 @@ The design goal is that the lab could be rebuilt from this repository alone.
 
 | | Contents |
 |---|---|
+<<<<<<< HEAD
 | **[`docs/`](docs/)** | A 13-page technical reference: Docker, Docker Compose, LXC versus VM, Proxmox, storage and thin provisioning, networking, DNS and TLS, backup and recovery, monitoring, Linux administration, troubleshooting and hardening. |
 | **[`runbooks/`](runbooks/)** | 11 step-by-step procedures, each with prerequisites, verification and rollback: creating containers, deploying services, cluster operations, backup restore drills and full disaster recovery. |
+=======
+| **[`docs/`](docs/)** | A 22-page technical reference: Docker, Docker Compose, LXC versus VM, Proxmox, storage and thin provisioning, networking, DNS and TLS, backup and recovery, monitoring, Linux administration, troubleshooting, hardening, and a nine-page sequence on network segmentation, bridges, NAT, firewalls, OPNsense and FreeBSD. |
+| **[`docs/reports/`](docs/reports/)** | Dated write-ups of changes large enough to have a story, including what broke. |
+| **[`runbooks/`](runbooks/)** | 18 step-by-step procedures, each with prerequisites, verification and rollback: creating containers, deploying services, cluster operations, building and sealing the DMZ, backup restore drills and full disaster recovery. |
+>>>>>>> e97a070 (security Update, DMZ for game server hosting and more)
 | **[`compose/`](compose/)** | 11 Docker Compose stacks covering every containerised service, published as templates with credentials externalised. |
 | **[`scripts/`](scripts/)** | Operational tooling: container provisioning, Docker installation, backup automation, health checking, and a secret scanner that runs pre-commit and in CI. |
 | **[`diagrams/`](diagrams/)** | The full architecture diagram, with editable draw.io source. |
 | **[`inventory/`](inventory/inventory.yml)** | A machine-readable inventory of every host, guest, service and address — the single source of truth from which the tables in this README are derived. |
+<<<<<<< HEAD
+=======
+
+Approximately 70,000 words, verified on every push by automated checks for
+leaked credentials, shell syntax, YAML validity and broken references.
+>>>>>>> e97a070 (security Update, DMZ for game server hosting and more)
 
 ---
 
 ## Architecture
 
+<<<<<<< HEAD
 
 ![Architecture diagram](diagrams/homelab.png) 
 
@@ -54,12 +67,28 @@ The lab is built in four layers, each with a defined responsibility.
 ### 1 · Compute — a three-node Proxmox VE cluster
 
 Three ThinkCentre M710q nodes form `HomelabCluster`: 12 cores and 96 GB of RAM
+=======
+![Architecture diagram](diagrams/homelab-2.png)
+
+*Editable source: [`diagrams/homelab.drawio`](diagrams/homelab.drawio)*
+
+The lab is built in five layers, each with a defined responsibility.
+
+### 1 · Compute — a three-node Proxmox VE cluster
+
+Three ThinkCentre M710q nodes form `HomelabCluster`: 12 cores and 64 GB of RAM
+>>>>>>> e97a070 (security Update, DMZ for game server hosting and more)
 under a single management plane, with corosync providing three votes and a
 quorum of two. One node can fail or be taken down for maintenance without the
 cluster losing its configuration filesystem.
 
 Every workload runs in an **unprivileged LXC container** rather than a virtual
+<<<<<<< HEAD
 machine. Containers share the host kernel, which gives sub-second start times
+=======
+machine, with exactly one deliberate exception: the firewall, which is FreeBSD
+and therefore cannot be a container on a Linux host. Containers share the host kernel, which gives sub-second start times
+>>>>>>> e97a070 (security Update, DMZ for game server hosting and more)
 and memory consumption proportional to actual use instead of allocation. The
 cost is that they cannot be live-migrated, and that trade-off is documented
 rather than omitted.
@@ -83,12 +112,51 @@ inbound port is open for issuance or renewal.
 
 ### 3 · Storage — a NAS beside the data
 
+<<<<<<< HEAD
 A UGREEN DH4300 with two 6 TB disks in RAID 1 holds media, photographs and
 backup archives. Jellyfin, Immich and Syncthing run on the NAS rather than in
 the cluster, placing the applications next to the data they serve and removing
 both a network share and a hardware-passthrough problem.
 
 ### 4 · External services
+=======
+A UGREEN DH4300 Plus holds media, photographs and backup archives across two
+volumes: a 1 TB Basic/Btrfs disk kept separate and detachable, and a 2 × 6 TB
+RAID 1/EXT4 array (~6 TB usable). Jellyfin, Immich and Syncthing run on the
+NAS rather than in the cluster, placing the applications next to the data they
+serve and removing both a network share and a hardware-passthrough problem.
+
+### 4 · Isolation — a software DMZ for anything internet-facing
+
+Everything reachable from the internet lives in `10.10.10.0/24`, a Proxmox
+bridge created with `bridge-ports none`: a switch with **no physical uplink**.
+An OPNsense VM straddles that bridge and the house network and is the only route
+between them. A block rule refuses every packet from the segment aimed at
+`192.168.178.0/24`.
+
+The design has two halves and needs both. **Separation**, so the exposed machine
+has no road to the trusted network, and **a chokepoint**, so the one road it
+does have is watched. Two earlier attempts to solve this with firewall rules on
+a flat network failed, because rules cannot substitute for a missing path.
+
+OPNsense is not *in* the path of anything else. It hangs off the switch rather
+than sitting in line, so the PC, the Pi, the NAS and all three Proxmox nodes
+route exactly as they did before, and the migration caused no downtime outside
+the game stack.
+
+![OPNsense firewall rules: the block rule above the two default allows](assets/screenshots/opnsense-lan-rules.png)
+
+*The whole thing in one screen. The floating rule lets the house reach the
+segment; on the LAN interface the block rule sits above the default allows,
+which is the only reason it does anything.*
+
+Reasoning: [`docs/12-network-segmentation.md`](docs/12-network-segmentation.md).
+Procedures: [runbooks 12 to 18](runbooks/). The full story, including everything
+that broke:
+[`docs/reports/2026-08-13-dmz-migration.md`](docs/reports/2026-08-13-dmz-migration.md).
+
+### 5 · External services
+>>>>>>> e97a070 (security Update, DMZ for game server hosting and more)
 
 Cloudflare provides authoritative DNS for the domain and the tunnel through
 which exactly one service is published to the internet. AdGuard Home, also on
@@ -107,8 +175,24 @@ Exactly one hostname is published externally, through a Cloudflare tunnel in
 which the connector establishes an **outbound** connection and receives requests
 over it. There is no inbound firewall rule for it, and no port forward.
 
+<<<<<<< HEAD
 The exception is the game servers, which use conventional port forwards. That is
 the weakest element of the design, and replacing it is the next planned change.
+=======
+The game servers are the honest exception: they use conventional port forwards,
+because players come from the internet and always will. **What changed in August
+2026 is where those forwards land.** They used to point at a container that was
+a peer of the NAS, the password vault and the Proxmox API. They now point at a
+firewall, which forwards them into a network segment with no route back.
+
+Verified rather than asserted: an `nmap` sweep of the house from inside the
+segment finds nothing, and every reachability probe returns a timeout.
+
+![OPNsense live log showing blocked traffic from the DMZ](assets/screenshots/opnsense-blocked-live-log.png)
+
+*A game container reaching for AdGuard, the NAS and the Proxmox API. Every row
+is `block`.*
+>>>>>>> e97a070 (security Update, DMZ for game server hosting and more)
 
 Full request paths, the proxy headers that commonly break applications, and the
 diagnostic procedure are in
@@ -120,23 +204,43 @@ diagnostic procedure are in
 
 | | Role | Address | Specification |
 |---|---|---|---|
-| **P1** `pve` | Proxmox node — carries all workload | `192.168.178.20:8006` | ThinkCentre M710q · i5-7500T (4C) · 32 GB · 94 GB ext4 |
-| **P2** `pve2` | Proxmox node | `192.168.178.50:8006` | same · plus `hdd-1tb` storage |
-| **P3** `pve3` | Proxmox node | `192.168.178.77:8006` | same · no guests, quorum vote |
+| **P1** `pve` | Proxmox node — general workload | `192.168.178.20:8006` | ThinkCentre M710q · i5-7500T (4C) · 16 GB · 94 GB ext4 |
+| **P2** `pve2` | Proxmox node — the whole game stack and the firewall | `192.168.178.77:8006` | M710q · i5-7400T (4C) · 32 GB · 238 GB NVMe · plus `hdd-1tb` |
+| **P3** `pve3` | Proxmox node | `192.168.178.50:8006` | M710q · i5-7500T (4C) · 16 GB · no guests, quorum vote |
+| **Firewall** | The only door into the game segment | `192.168.178.60` | OPNsense VM 200 on P2 · 2 GB · 2 cores · 20 GB UFS |
 | **Pi** | Ingress and LAN DNS | `192.168.178.178` | Raspberry Pi 5 · 8 GB · DietPi · Docker |
-| **NAS** | Storage, media, backup target | `192.168.178.49` | UGREEN DH4300 · UGOS Pro · 2 × 6 TB RAID 1 |
+| **NAS** | Storage, media, backup target | `192.168.178.49` | UGREEN DH4300 Plus · UGOS Pro · 1 TB Btrfs + 2 × 6 TB RAID 1/EXT4 |
 | **Router** | Gateway, DHCP, DynDNS | `192.168.178.1` | FRITZ!Box 7590 |
 | **Switch** | | | TP-Link TL-SG108 v3 · 8-port gigabit · unmanaged |
 
-Flat `/24`, no VLANs, static addressing throughout. AdGuard Home is the DNS
-resolver for every device on the network.
+**Two networks.** The house is a flat `192.168.178.0/24` with no VLANs and
+static addressing throughout, and AdGuard Home resolves for every device on it.
+The game segment is `10.10.10.0/24` on `vmbr1`, a bridge with no physical
+uplink, and it resolves against a public resolver because AdGuard sits on the
+other side of the block rule.
+
+| | House LAN | Game segment |
+|---|---|---|
+| Subnet | `192.168.178.0/24` | `10.10.10.0/24` |
+| Bridge | `vmbr0`, real NIC attached | `vmbr1`, `bridge-ports none` |
+| Gateway | FRITZ!Box `.1` | OPNsense `10.10.10.1` |
+| DNS | AdGuard `.178` | `1.1.1.1` |
+| Reaches the other side? | **yes**, stateful, admin only | **no** |
 
 ### The cluster
 
-<img src="assets/screenshots/proxmox-cluster-tree.png" alt="Proxmox cluster tree showing HomelabCluster with nodes pve, pve2 and pve3, and the LXC guests on pve" width="360" align="right">
+<img src="assets/screenshots/proxmox-cluster-tree-dmz.png" alt="Proxmox cluster tree: HomelabCluster with pve, pve2 and pve3, the game stack and VM 200 opnsense on pve2" width="330" align="right">
 
+<<<<<<< HEAD
 `HomelabCluster`, three corosync votes, two needed for quorum. One node can fail
 or be taken down for maintenance without the cluster losing `/etc/pve`.
+=======
+Every guest is an unprivileged LXC container except VM 200, the OPNsense
+firewall. That exception is not a compromise: OPNsense is FreeBSD, a container
+shares the host's Linux kernel, and a firewall guarding against a compromised
+guest should not borrow the kernel it is protecting. The selection criteria are
+in [`docs/04-lxc-vs-vm.md`](docs/04-lxc-vs-vm.md).
+>>>>>>> e97a070 (security Update, DMZ for game server hosting and more)
 
 <br clear="right">
 
@@ -196,30 +300,40 @@ the lab.
 | Apache | 80 | `apache.` | **internet, via tunnel** |
 | cloudflared | — | — | outbound only |
 
+<<<<<<< HEAD
 
+=======
+*n8n was previously documented as planned for P2. It is in fact deployed here;
+the inventory has been corrected accordingly.*
+>>>>>>> e97a070 (security Update, DMZ for game server hosting and more)
 
 ### DNS
 
 ![AdGuard Home dashboard: 123,095 queries in 24 hours, 38,598 blocked](assets/screenshots/adguard-dashboard.png)
 
-*123,095 DNS queries in 24 hours, **38,598 blocked — 31.4%**, 15 ms average
-processing time. The top-clients list is every device in the house going through
-one resolver, which is the point: network-wide filtering with zero
-configuration on any client, including the ones that cannot run software of
-their own.*
+*123,095 DNS queries in 24 hours, **38,598 blocked (31.4%)**, 15 ms average
+processing time. Every device on the network resolves through this instance,
+which delivers network-wide filtering with no client-side configuration —
+including for devices that cannot run filtering software themselves.*
 
-*It is also the clearest picture of this lab's biggest single point of failure.
-Every one of those 123,095 queries went through one container on one Raspberry
-Pi.*
+*The same figure describes the primary single point of failure: all 123,095
+queries were served by one container on one Raspberry Pi.*
 
-### P1 `pve` · game hosting
+### P2 `pve2` · game hosting, inside the DMZ
+
+Since August 2026 the entire game stack lives in `10.10.10.0/24`, behind
+OPNsense, with no route to the house network.
 
 | Guest | IP | Port | |
 |---|---|---:|---|
-| LXC 101 `casaos` | `.59` | 90 | CasaOS |
-| LXC 106 `panel` | `.84` | 80 | Pterodactyl panel |
-| LXC 105 `wings` | `.36` | — | Pterodactyl daemon — runs each server as its own container |
-| LXC 107 `amp-server` | `.32` | 8080 | CubeCoders AMP |
+| VM 200 `opnsense` | `10.10.10.1` / `192.168.178.60` | 80 | the firewall, one leg in each network |
+| LXC 106 `panel` | `10.10.10.22` | 80 | Pterodactyl panel |
+| LXC 105 `wings` | `10.10.10.20` | 9090 | Pterodactyl daemon — runs each server as its own container |
+| LXC 107 `amp-server` | `10.10.10.21` | 8080 | CubeCoders AMP |
+
+The panel was moved **into** the segment rather than allowed through it, so no
+game-hosting service has any route into the house at all. LXC 101 `casaos`
+(`.59`) stays on the house network; it is not internet-facing.
 
 <img src="assets/screenshots/pterodactyl-servers.png" alt="Pterodactyl panel showing the zomboid and minecraft servers">
 
@@ -229,11 +343,14 @@ Pi.*
 Terraria and Space Engineers under AMP. Pterodactyl runs each server as its own
 Docker container, so a compromise of one is contained to that container.*
 
-**The port numbers are blurred on purpose.** These are the only services in the
-lab behind a WAN port forward, and publishing "this port is open" is the one
-thing this repository does not do. The reasoning is in
-[`docs/99-security-notes.md`](docs/99-security-notes.md), and the fact that the
-rule visibly costs something here is the point of having written it down.
+*Both screenshots predate the migration and show the old `192.168.178.x`
+addresses. They are kept as they are; a dated screenshot of a past state is not
+a leak.*
+
+**Port numbers are redacted in both screenshots.** These are the only services
+behind a WAN port forward, and the publication policy in
+[`docs/99-security-notes.md`](docs/99-security-notes.md) excludes any
+information about which ports are externally reachable.
 
 ### NAS · UGOS Pro · Docker
 
@@ -266,8 +383,8 @@ this graph to exist rather than to assume.*
 
 ![Prometheus target health: two scrape pools, both up](assets/screenshots/prometheus-targets.png)
 
-*Prometheus target health, and an honest picture: **two scrape pools, both
-up.** Prometheus itself, and `node_exporter` on P1. P2, P3, the Raspberry Pi,
+*Prometheus target health: **two scrape pools, both up** — Prometheus itself,
+and `node_exporter` on P1. P2, P3, the Raspberry Pi,
 cAdvisor and the Proxmox API exporter are written into
 [`prometheus.yml`](compose/monitoring/prometheus.yml) and are not yet deployed —
 they are marked as such in the file. Monitoring one of three nodes is a gap, and
@@ -279,8 +396,8 @@ host means editing `prometheus.yml` and installing an exporter, and never
 configuring the new host to know about Prometheus. Retention is 90 days, because
 the default 15 is too short to see a slow leak.
 
-The stack, the PromQL that actually gets used, and the honest gap — **nothing
-alerts** — are in [`docs/08-monitoring.md`](docs/08-monitoring.md). The scrape
+The full stack, the PromQL queries in active use, and the outstanding gap —
+**no alerting** — are documented in [`docs/08-monitoring.md`](docs/08-monitoring.md). The scrape
 configuration is
 [`compose/monitoring/prometheus.yml`](compose/monitoring/prometheus.yml).
 
@@ -307,7 +424,7 @@ asked for.
 
 ### The wiki — [`docs/`](docs/)
 
-*What things are, and why. Written for the version of me who has forgotten.*
+*Reference material: what each component is, and why it was chosen.*
 
 | | Page | What it answers |
 |---|---|---|
@@ -350,6 +467,44 @@ different compose file.
 
 ---
 
+<<<<<<< HEAD
+=======
+## Nextcloud
+
+Documented separately because it is fully designed and not yet deployed. The
+deployment decisions are the substance, and they are made before installation
+rather than discovered during it.
+
+[`runbooks/07-nextcloud.md`](runbooks/07-nextcloud.md) is a complete deployment
+plan for P2: four containers (app, PostgreSQL, Redis, a dedicated cron runner),
+the reverse-proxy configuration that determines whether it works at all, and the
+post-install steps that decide whether it is still usable at 500 GB.
+
+The decisions it documents:
+
+- **PostgreSQL over MariaDB** — hardest-tested by upstream, `pg_dump` gives a
+  clean restorable file, avoids the `utf8mb4` migration MariaDB instances hit
+  years later
+- **Redis is not optional in practice** — it is documented as optional, and
+  every instance without it eventually produces file-locking errors needing
+  manual database intervention
+- **A separate cron container** — the default AJAX cron only fires when someone
+  loads a page, so on a lightly used instance the background jobs silently never
+  run
+- **`TRUSTED_PROXIES` scoped to exactly the proxy** — too broad and a client can
+  spoof its own address; unset and every log line and rate limit sees the proxy
+- **Indices and `bigint` conversion before the instance grows**, not after
+
+The compose file is
+[`compose/nextcloud/docker-compose.example.yml`](compose/nextcloud/docker-compose.example.yml),
+with the reasoning for each of the four containers written into it.
+
+When it is running on P2, the status header comes off that page and its
+expectations become observations.
+
+---
+
+>>>>>>> e97a070 (security Update, DMZ for game server hosting and more)
 ## Repository layout
 
 ```text
@@ -359,7 +514,11 @@ diagrams/
   homelab.drawio             editable architecture diagram
   homelab.png                exported for this README
 docs/                        the wiki: what things are and why
+  12-network-segmentation.md   why a flat network cannot be fixed with rules
+  13 .. 20                     addressing, bridges, NAT, firewalls, OPNsense, FreeBSD
+  reports/                     dated write-ups of large changes, including what broke
 runbooks/                    step-by-step procedures
+  12 .. 18                     build the DMZ, seal it, and recover it
 compose/
   <service>/
     docker-compose.example.yml
@@ -384,51 +543,75 @@ Marked with a dashed border in the diagram. None of this is running yet.
 |---|---|---|
 | **k3s** server + 2 agents | all three nodes | Proxmox schedules containers per node; k3s adds declarative manifests, self-healing and rescheduling across nodes |
 | **Nextcloud** | P2 | files and sync — [runbook already written](runbooks/07-nextcloud.md) |
-| **Jenkins** | P2 | CI/CD for my other repositories |
+| **Jenkins** | P2 | CI/CD for other repositories |
 | **OpenStack** | P3 | private cloud lab |
 | **Apache CloudStack** | P3 | IaaS orchestration lab |
-| **WireGuard** | router | replace the game-server port forwards |
-| **Alertmanager** | LXC 102 | nothing notifies me today |
+| **Alertmanager** | LXC 102 | no automated notification exists today |
+| **Egress filtering** | OPNsense | the game segment can currently reach anything outbound |
+| **A subnet per service** | OPNsense | wings, AMP and the panel are currently neighbours |
+| **Omada ES210X-M2** | rack | 802.1Q, so `vmbr1` becomes a real tagged VLAN and the firewall stops depending on the host it protects |
 
-Two honest caveats on that list.
+Two constraints apply to that list.
 
 **k3s inside an unprivileged LXC needs extra work.** cgroup delegation, kernel
 modules and the storage driver all have to be dealt with. A VM would be the
 straightforward route, which conflicts with the LXC-only rule above. That
 trade-off has to be made before this gets built.
 
-**OpenStack and CloudStack on a 32 GB i5-7500T are a learning exercise, not a
+**OpenStack and CloudStack on a 16 GB i5-7500T are a learning exercise, not a
 deployment.** A realistic OpenStack controller wants more RAM than the whole
 node has, and running it on Proxmox means nested virtualisation. It goes on P3
 as a lab and it is labelled that way on purpose.
+
+**WireGuard has been dropped from this list.** It was here to replace the game
+port forwards, which made sense when the forwards were the whole problem.
+Making players join the network is the right model for a private server and the
+wrong one for a public one; the DMZ addresses the actual risk, for no recurring
+cost and no friction for players. The reasoning is in
+[`docs/11-hardening.md`](docs/11-hardening.md).
 
 ---
 
 ## Known limitations
 
-Written down deliberately. Knowing the weak spots is half the point of running
-the thing, and a homelab repository that lists only strengths is a brochure.
+Documented deliberately. A system's weak points are operational knowledge, and
+a repository that lists only strengths is not documentation.
 
-- **Nothing alerts.** Prometheus collects and Grafana draws; nothing tells me
-  when something breaks. I find out by looking. This is the largest gap.
+- **No alerting.** Prometheus collects and Grafana visualises; nothing issues a
+  notification when a service fails. Failures are detected by inspection. This
+  is the largest gap in the system.
 - **Only P1 is actually scraped.** `prometheus.yml` describes exporters on P2,
   P3, the Pi and cAdvisor; only P1's `node_exporter` is deployed. The two nodes
   with no workload are also the two nodes with no metrics, which is exactly
   backwards from where a surprise would come from.
-- **Game server port forwards are the only direct inbound path into the LAN.**
-  Everything else is LAN-only or goes through an outbound tunnel. Replacing them
-  with WireGuard on the router is the next task.
+- **The game segment has no internal walls.** wings, AMP and the panel share
+  `10.10.10.0/24` and are neighbours on one bridge, so traffic between them
+  never reaches the firewall. Compromise a game server and you can reach the
+  panel; panel admin means code execution on wings. A subnet per service is the
+  fix.
+- **Egress from the game segment is unrestricted.** The block rule stops it
+  reaching the house; nothing stops it reaching the internet. A compromised
+  server could mine, join a botnet, or attack third parties from this address.
+- **The firewall runs on the machine it protects against.** OPNsense is a VM on
+  pve2 and both bridges live on pve2, so root on that host defeats the whole
+  arrangement. Only enforcement in hardware the compromised guest does not
+  control closes this, which is what a managed switch would buy.
+- **A leftover IPv6 allow rule sits under the block rule.** The block is IPv4
+  only. Harmless while the segment has no IPv6 address, and an open door around
+  it the moment it gets one. Visible in the rules screenshot above.
 - **The Raspberry Pi is a single point of failure.** Ingress and LAN-wide DNS
   both run on it. If it dies, name resolution stops for every device on the
   network.
 - **No offsite backup.** RAID 1 on the NAS protects against a dead disk, not
   against fire, theft or a mistaken `rm`. The backups are also unencrypted at
   rest.
-- **P1 carries everything.** P2 and P3 hold no workload, so the cluster provides
-  quorum and maintenance headroom but no load distribution. That is what the k3s
-  plan is meant to fix.
-- **No network segmentation.** The switch is unmanaged, so there are no VLANs. A
-  compromised IoT device is on the same flat network as the Proxmox API.
+- **P2 now carries everything that matters.** The whole game stack plus the
+  firewall live on one node, so pve2 is a single point of failure for anything
+  internet-facing, and P3 still holds no workload. That is what the k3s plan is
+  meant to fix.
+- **The house network is still flat.** Segmentation exists for the game servers
+  and only for them. The switch is unmanaged, so there are no VLANs, and a
+  compromised IoT device is still on the same network as the Proxmox API.
 - **No 2FA on Proxmox.** The Proxmox API is root over every guest in the lab.
   This is the least defensible item on the list.
 - **Provisioning is manual.** Containers are created by hand or by a shell
@@ -436,8 +619,8 @@ the thing, and a homelab repository that lists only strengths is a brochure.
   step, and the scripts here are *consistency*, not infrastructure as code.
 - **No UPS.** A power cut is an unclean shutdown for all four machines at once.
 
-The threat model behind which of these matter, and the order I would fix them
-in, is in [`docs/11-hardening.md`](docs/11-hardening.md).
+The threat model that determines which of these matter, and the order in which
+they are prioritised, is in [`docs/11-hardening.md`](docs/11-hardening.md).
 
 ---
 
@@ -448,9 +631,17 @@ are RFC1918, not routable from the internet, and worthless to anyone who is not
 already inside the network. The hostnames are already in public Certificate
 Transparency logs, so hiding them here would be theatre.
 
+The same holds for `10.10.10.0/24`. It is RFC1918, it exists on one bridge
+inside one node, and publishing it is what makes the firewall rules legible.
+The rules are the interesting part.
+
 The public IP, the IPv6 host addresses, MAC addresses, the DuckDNS hostname, the
 WAN port forwards and every credential are not in this repository and never will
-be.
+be. In the DMZ material that means exactly two things are held back: the public
+address, and the **external** port numbers of the game forwards. Every internal
+address, every firewall rule, the rule order, the NAT logic and the static route
+are published in full, and screenshots have their MAC addresses and the
+firewall's exact patch level blanked.
 
 The rule is in [`docs/99-security-notes.md`](docs/99-security-notes.md). It is
 enforced mechanically rather than by discipline:
@@ -478,8 +669,9 @@ a public repository cannot be taken back.
 
 <div align="center">
 
-**[Wiki](docs/) · [Runbooks](runbooks/) · [Compose files](compose/) ·
-[Scripts](scripts/) · [Inventory](inventory/inventory.yml)**
+**[Wiki](docs/) · [Runbooks](runbooks/) · [Reports](docs/reports/) ·
+[Compose files](compose/) · [Scripts](scripts/) ·
+[Inventory](inventory/inventory.yml)**
 
 MIT · [LICENSE](LICENSE)
 

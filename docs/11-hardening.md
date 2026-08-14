@@ -43,11 +43,15 @@ to security theatre. The defences below are chosen against 1 to 3.
 | SSH | **no** | LAN only |
 | VPN | **no** | none configured — see limitations |
 | `apache.theminddev.com` | **yes** | Cloudflare Tunnel, outbound only, static content only |
-| Game server ports | **yes** | classic port forwards — the weak point |
+| Game server ports | **yes** | forwarded to a firewall, into an isolated network segment |
 
 The single sentence version: **the only inbound paths are the game server port
-forwards, and everything else is either LAN-only or reached through an outbound
-tunnel.**
+forwards, they land in a sealed segment that cannot reach the house, and
+everything else is either LAN-only or reached through an outbound tunnel.**
+
+Every forward now points at `192.168.178.60`, the OPNsense WAN leg. **Nothing on
+the house LAN is a forward target any more.** That is the single structural
+change made in August 2026.
 
 ---
 
@@ -145,27 +149,64 @@ An unpatched container is the most likely way threat 1 succeeds.
 Written down as gaps, not omitted. A hardening page that only lists strengths is
 a marketing page.
 
-### No network segmentation
+### Segmentation is done for the game servers, and only for them
 
-The right design puts IoT devices, game servers and the management plane in
-separate VLANs, so a compromised smart plug cannot reach the Proxmox API.
+**What is done.** Everything internet-facing (Pterodactyl wings and panel, AMP)
+lives in `10.10.10.0/24`, on a Proxmox bridge with `bridge-ports none` and no
+physical uplink. An OPNsense VM is the only route out, and a block rule refuses
+`10.10.10.0/24 -> 192.168.178.0/24`. Verified: a game container cannot reach
+Proxmox, the NAS, AdGuard or my PC, and an `nmap` sweep of the house from inside
+the segment finds nothing.
 
-**Why not:** the TL-SG108 v3 is unmanaged. VLANs need a managed switch. That is
-the real reason and it costs about sixty euros to fix.
+Full reasoning: [`12-network-segmentation.md`](12-network-segmentation.md).
+The build: [runbooks 12 to 18](../runbooks/).
 
-### Game server port forwards
+**What is not done.** IoT devices, the management plane and my own machines are
+still on one flat `192.168.178.0/24`. A compromised smart plug can still reach
+the Proxmox API. That is threat 2 and it is unaddressed.
 
-The one direct inbound path. A game server is a complex application processing
-untrusted input from strangers, running in a container, on the same flat network
-as everything else.
+**Why not:** the TL-SG108 v3 is unmanaged and cannot tag VLAN frames. A software
+bridge works for the game segment only because those guests all live on one
+node. Segmenting the physical LAN needs a managed switch, roughly sixty euros.
 
-**Mitigation in place:** Pterodactyl Wings runs each server as its own Docker
-container, so a compromise is contained to that container rather than the host.
+### Three gaps inside the segment that was built
 
-**The planned fix:** WireGuard on the router, so players join the network rather
-than the internet reaching the servers. That changes the model from "anyone can
-connect" to "people I gave a key to can connect", which is the correct model for
-a private server.
+Written down because a segment is not a boundary until these are closed.
+
+1. **No internal walls.** wings, AMP and the panel share `10.10.10.0/24` and are
+   neighbours on the same bridge, so traffic between them never reaches
+   OPNsense. Compromise a game server and you can reach the panel; panel admin
+   means code execution on wings. The fix is a subnet per service.
+2. **Egress is unrestricted.** The segment may reach anything on the internet. A
+   compromised server could mine, join a botnet, or attack third parties from my
+   address.
+3. **A Proxmox host escape defeats all of it.** OPNsense is a VM on pve2 and
+   both bridges live on pve2. Root there controls the referee. Only enforcement
+   in hardware the compromised machine does not control closes this, which is
+   what the managed switch buys.
+
+There is also a leftover **IPv6 allow rule** on the OPNsense LAN interface. The
+block rule is IPv4 only. Harmless while the segment has no IPv6 address, and an
+open door around the block the moment it gets one. It should be deleted.
+
+### Game server port forwards still exist
+
+They always will: players come from the internet and their addresses cannot be
+known in advance. The point was never to remove them.
+
+**What changed** is where they land. Previously a forward pointed at a container
+that was a peer of every machine in the house. Now it points at a firewall,
+which forwards it into a network with no route back.
+
+**Mitigations in place:** Pterodactyl wings runs each game as its own Docker
+container; the segment is sealed; the admin ports (panel, wings API) are
+forwarded with a source restricted to `192.168.178.0/24`, so they exist for me
+and not for the internet.
+
+**WireGuard is no longer the planned fix.** It was the plan when the forwards
+were the whole problem. Making players join the network was the correct model
+for a private server and the wrong tool for a public one, and the segmentation
+does more, for zero recurring cost and no friction for players.
 
 ### No 2FA on internal services
 
@@ -216,11 +257,17 @@ for a lab run in evenings.
 |---:|---|---|
 | 1 | **Alertmanager** | not knowing is worse than any single missing control |
 | 2 | **2FA on Proxmox** | the API is root over everything; ten minutes of work |
-| 3 | **WireGuard, drop the game port forwards** | removes the only real inbound path |
-| 4 | **Offsite encrypted backup** | the failure with no recovery |
-| 5 | **Managed switch and VLANs** | the correct answer to threat 2, but it needs hardware |
-| 6 | **Host firewalls** | defence in depth once segmentation exists |
-| 7 | **Log aggregation** | valuable, and the largest time investment |
+| 3 | **Delete the leftover IPv6 allow rule** | two minutes, and it currently routes around the block rule if IPv6 ever appears |
+| 4 | **Egress filtering out of the DMZ** | closes gap 2 above; an evening in the OPNsense rule editor, no hardware |
+| 5 | **Offsite encrypted backup** | the failure with no recovery |
+| 6 | **A subnet per service inside the DMZ** | closes gap 1 above |
+| 7 | **Managed switch and VLANs** | the correct answer to threat 2, and it also closes gap 3 |
+| 8 | **Host firewalls** | defence in depth once segmentation is physical |
+| 9 | **Log aggregation** | valuable, and the largest time investment |
+
+Items 3 and 4 moved to the top because they are cheap, they need no hardware,
+and they close gaps in a control that already exists. Fixing something you
+already built is almost always better value than building the next thing.
 
 ---
 
@@ -242,6 +289,13 @@ difference between knowing what broke and guessing.
 **Assume the LAN is hostile.** It contains a smart plug, a TV and whatever
 firmware they shipped with. Encrypt internal traffic, use unique credentials,
 and do not leave admin interfaces unauthenticated because "it is only local".
+
+**Prefer removing the path to writing a rule.** Two attempts to protect the game
+servers with Proxmox firewall rules on a flat network failed, because every
+machine still had a physical path to every other one and one wrong rule either
+broke everything or protected nothing. The third attempt worked because it began
+by deleting the road. **A rule can be removed by mistake; a cable that does not
+exist cannot.**
 
 ---
 

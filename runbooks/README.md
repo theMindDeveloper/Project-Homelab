@@ -45,6 +45,23 @@ Every page here follows the same shape:
 | 06 | [Publish one service with a Cloudflare Tunnel](06-cloudflare-tunnel.md) | 15 min |
 | 08 | [Add a node to the Proxmox cluster](08-add-a-node-to-the-cluster.md) | 15 min |
 
+### The DMZ
+
+Run these **in order**. Each assumes the one before it. The reasoning behind all
+of them is [`docs/12-network-segmentation.md`](../docs/12-network-segmentation.md),
+and the story of doing it for real is
+[the migration report](../docs/reports/2026-08-13-dmz-migration.md).
+
+| | Runbook | Time |
+|---|---|---|
+| 12 | [Create an isolated bridge](12-create-an-isolated-bridge.md) | 5 min |
+| 13 | [Install the OPNsense VM](13-install-the-opnsense-vm.md) | 45 min |
+| 14 | [Write the DMZ firewall rules](14-opnsense-dmz-firewall-rules.md) — **the one that matters** | 20 min |
+| 15 | [Move an LXC into the DMZ](15-move-an-lxc-into-the-dmz.md) | 10 min + copy time |
+| 16 | [Publish a game server port](16-publish-a-game-server-port.md) | 2 min per game |
+| 17 | [Recover from an OPNsense lockout](17-recover-from-an-opnsense-lockout.md) — **read before you need it** | 5 min |
+| 18 | [Reconfigure Pterodactyl after a move](18-reconfigure-pterodactyl-after-a-move.md) | 20 min |
+
 ### Services
 
 | | Runbook | Time |
@@ -59,6 +76,16 @@ Every page here follows the same shape:
 |---|---|---|
 | 09 | [The backup restore drill](09-backup-restore-drill.md) — **quarterly** | 30 min |
 | 11 | [Rebuild the lab from zero](11-rebuild-from-zero.md) | a weekend |
+
+---
+
+## If something in the DMZ is broken right now
+
+[Runbook 17](17-recover-from-an-opnsense-lockout.md) if you cannot reach the
+firewall GUI. [Runbook 18](18-reconfigure-pterodactyl-after-a-move.md) if the
+game console will not connect. The symptom index in
+[`docs/20`](../docs/20-game-server-hosting.md#symptom-index) maps most of the
+rest.
 
 ---
 

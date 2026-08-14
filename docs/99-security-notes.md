@@ -38,7 +38,7 @@ information that helps them reach *my* machines.
 | **The DuckDNS hostname** | It is a public DNS name that resolves to the current WAN address. Publishing it is the same as publishing the public IP, with the added convenience that it stays correct. |
 | **Exact software versions** | "Proxmox VE 8.x" is fine. "8.2.4" plus a published CVE is a shopping list. |
 | **Any secret** | API tokens, passwords, TLS private keys, SSH private keys, `.env` files, Vaultwarden exports, backup credentials. |
-| **Personal hostnames** | Devices are named by function, not by person or place. `docker-01`, not `mohammads-laptop-berlin`. |
+| **Personal hostnames** | Devices are named by function, not by person or place. `docker-01`, not `<firstname>s-laptop-<city>`. |
 
 ---
 
@@ -79,8 +79,17 @@ at the external one. Publishing "this port is open" is exactly what the table
 above says is never published. Blurring costs the reader nothing that matters
 and keeps the rule intact.
 
-The addresses in the same screenshots are `192.168.178.36` and
-`192.168.178.32`, and they are left visible, because they are RFC1918.
+The addresses in the same screenshots were `192.168.178.36` and
+`192.168.178.32`, and they were left visible, because they are RFC1918. Those
+screenshots predate the August 2026 DMZ migration; those guests now live at
+`10.10.10.20` and `10.10.10.21`, which is equally RFC1918 and equally safe to
+publish. The screenshots are kept as they are, because a dated screenshot of a
+past state is not a leak.
+
+**The blurring rule now covers a second surface.** Any screenshot of the
+OPNsense NAT rules shows the external port numbers in a single column, so those
+are blurred by the same reasoning. Screenshots of the FRITZ!Box port-share page
+are not committed at all, because the entire page is the forward list.
 
 ### Container image tags are visible, and that is deliberate
 
@@ -119,10 +128,22 @@ already on the LAN, and if you are already on the LAN you did not need the
 diagram. On top of that, `192.168.178.x` is the factory default of every
 FRITZ!Box in Germany, so it identifies nothing about this particular network.
 
+The same reasoning covers the second network. `10.10.10.0/24` is RFC1918, it
+exists only on one bridge inside one Proxmox node, and it is not reachable from
+the internet by any path. Publishing it is what makes the firewall rules
+legible, and the rules are the interesting part.
+
 Half-redacting is worse than not redacting. Writing `192.168.178.x` for the
-nodes while the guests still show `.59`, `.84` and `.36` costs the reader
-clarity and gains no security at all. Either publish the addressing plan or
-publish none of it. This repository publishes it.
+nodes while the guests still show `.59` and `.87` costs the reader clarity and
+gains no security at all. Either publish the addressing plan or publish none of
+it. This repository publishes it.
+
+**What is redacted in the DMZ material**, and only this: the public address, and
+the external port numbers of the game forwards. Every internal address, every
+firewall rule, the rule order, the NAT logic and the static route are published
+in full. Knowing that a block rule sits above two pass rules on the LAN
+interface of a firewall you cannot reach is worth nothing to an attacker and
+everything to a reader.
 
 ## The part I would show an interviewer
 
@@ -139,7 +160,23 @@ Exactly one hostname is published to the internet, and it goes through a
 Cloudflare tunnel: an outbound connection from the lab to Cloudflare. There is no
 inbound firewall rule for it at all.
 
-The honest exception is the game servers, which use classic port forwards. That
-is the weakest part of the setup and it is the next thing on the list to replace,
-most likely with a WireGuard tunnel on the router so that players join the
-network instead of the internet reaching the servers.
+The honest exception is the game servers, which use classic port forwards,
+because players come from the internet and always will.
+
+**What changed in August 2026 is where those forwards land.** They used to point
+at a container sitting on the same flat network as the NAS, the password vault
+and the Proxmox API, so one game exploit meant total compromise. They now point
+at an OPNsense firewall, which forwards them into `10.10.10.0/24`: a Proxmox
+bridge with no physical uplink, whose only exit is that firewall, with a rule
+refusing every packet aimed at `192.168.178.0/24`.
+
+A compromised game server now reaches the internet and nothing else in the
+house. That is verified, not asserted: an `nmap` sweep of the house from inside
+the segment finds nothing, and every reachability probe returns a timeout.
+
+The remaining weaknesses are written down honestly in
+[`11-hardening.md`](11-hardening.md) and in
+[the migration report](reports/2026-08-13-dmz-migration.md): the three guests
+inside the segment are still neighbours of each other, outbound traffic is
+unrestricted, and a Proxmox host escape would defeat the whole arrangement
+because the firewall runs on the machine it is protecting from.

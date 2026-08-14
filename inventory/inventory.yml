@@ -10,67 +10,108 @@
 #    the DuckDNS hostname, tunnel IDs, tokens, passwords, exact patch versions.
 #  See docs/99-security-notes.md for the rule and scripts/check-secrets.sh
 #  for the mechanism that enforces it.
+#
+#  As of 2026-08-13 this lab has TWO networks, not one. See
+#  docs/12-network-segmentation.md and
+#  docs/reports/2026-08-13-dmz-migration.md.
 # ---------------------------------------------------------------------------
 
 meta:
   name: theminddev-homelab
   domain: theminddev.com
-  updated: 2026-08-11
+  updated: 2026-08-14
 
-network:
-  subnet: 192.168.178.0/24
-  gateway: 192.168.178.1
-  dns: 192.168.178.178          # AdGuard Home, authoritative for the LAN
-  upstream_dns: [1.1.1.1, 9.9.9.9]
-  vlans: none                   # flat /24, deliberate - see README "Known limitations"
-  addressing: static            # DHCP is on, every lab host is pinned
-  reservations:
-    infrastructure: .1 - .19    # router, switch, APs
-    proxmox_nodes:  .20 - .79
-    appliances:     .80 - .99   # NAS, Pi, printers
-    guests:         .30 - .99   # LXC containers (historic, not contiguous)
+networks:
+
+  # --- the house LAN -------------------------------------------------------
+  - id: lan
+    subnet: 192.168.178.0/24
+    gateway: 192.168.178.1        # FRITZ!Box 7590
+    dns: 192.168.178.178          # AdGuard Home, authoritative for the LAN
+    upstream_dns: [1.1.1.1, 9.9.9.9]
+    bridge: vmbr0                 # on every Proxmox node, real NIC attached
+    vlans: none                   # flat /24 - see README "Known limitations"
+    addressing: static            # DHCP is on, every lab host is pinned
+    trust: trusted
+    reservations:
+      infrastructure: .1 - .19    # router, switch, APs
+      proxmox_nodes:  .20 - .79
+      firewall:       .60         # OPNsense WAN leg
+      appliances:     .80 - .99   # NAS, Pi, printers
+      guests:         .30 - .99   # LXC containers (historic, not contiguous)
+
+  # --- the sealed game segment (software DMZ) ------------------------------
+  - id: dmz
+    subnet: 10.10.10.0/24
+    gateway: 10.10.10.1           # OPNsense LAN leg, the ONLY exit
+    dns: 1.1.1.1                  # AdGuard is unreachable from here, by design
+    bridge: vmbr1                 # on pve2 ONLY, bridge-ports none (no uplink)
+    node: pve2
+    addressing: static
+    trust: untrusted              # everything here is internet-facing
+    egress: internet only         # 192.168.178.0/24 is blocked at the firewall
+    ingress: from 192.168.178.0/24 (stateful pass) and WAN DNAT for game ports
+    reservations:
+      firewall: .1
+      guests:   .20 - .99
+
+cluster:
+  name: HomelabCluster
+  nodes: [pve, pve2, pve3]
+  votes: 3
+  quorum: 2
+  guest_type: LXC + one VM        # VM 200 is the firewall - docs/17-opnsense-concepts.md
+  live_migration: false           # a consequence of LXC-only workloads
+  ha_groups: none
 
 hardware:
 
   - id: router
     model: AVM FRITZ!Box 7590
-    role: gateway, DHCP, dynamic DNS client
+    role: gateway, DHCP, dynamic DNS client, WAN port forwards, static route
     address: 192.168.178.1
+    static_routes:
+      - {destination: 10.10.10.0/24, via: 192.168.178.60}
+    note: >
+      no usable bridge mode on DSL, so it cannot be demoted to a modem.
+      Replacing it is the prerequisite for a hardware DMZ.
 
   - id: switch
     model: TP-Link TL-SG108 v3
     role: 8-port gigabit, unmanaged
-    address: null               # unmanaged, no management plane
+    address: null                 # unmanaged, no management plane
+    note: cannot tag VLAN frames - the reason the DMZ is software, not hardware
 
   - id: p1
     node: pve
     model: Lenovo ThinkCentre M710q
     cpu: Intel i5-7500T (4C/4T)
-    ram_gb: 32
+    ram_gb: 16
     disk: 94 GB ext4 (local + local-lvm)
     address: 192.168.178.20
     port: 8006
     hostname: p1.theminddev.com
-    role: Proxmox VE node - carries all workload
+    role: Proxmox VE node - general workload
 
   - id: p2
     node: pve2
     model: Lenovo ThinkCentre M710q
-    cpu: Intel i5-7500T (4C/4T)
+    cpu: Intel i5-7400T (4C/4T)
     ram_gb: 32
-    disk: local + local-lvm + hdd-1tb
-    address: 192.168.178.50
+    disk: 238 GB NVMe (local + local-lvm) + hdd-1tb
+    address: 192.168.178.77
     port: 8006
     hostname: p2.theminddev.com
-    role: Proxmox VE node - quorum vote, target for planned workload
+    role: Proxmox VE node - carries the entire game stack and the firewall VM
+    note: RAM raised from 16 GB to 32 GB after the DMZ migration
 
   - id: p3
     node: pve3
     model: Lenovo ThinkCentre M710q
     cpu: Intel i5-7500T (4C/4T)
-    ram_gb: 32
+    ram_gb: 16
     disk: local + local-lvm
-    address: 192.168.178.77
+    address: 192.168.178.50
     port: 8006
     hostname: p3.theminddev.com
     role: Proxmox VE node - quorum vote, no guests
@@ -83,27 +124,29 @@ hardware:
     role: ingress (Nginx Proxy Manager) and LAN DNS (AdGuard Home)
 
   - id: nas
-    model: UGREEN DH4300
+    model: UGREEN DH4300 Plus
     os: UGOS Pro
     address: 192.168.178.49
-    disks: 2 x 6 TB, RAID 1 mirror
+    disks: 1 TB Basic/Btrfs (separate, detachable), 2 x 6 TB RAID 1/EXT4 (~6 TB usable)
     role: media, photos, backup target, Docker host
-
-cluster:
-  name: HomelabCluster
-  nodes: [pve, pve2, pve3]
-  votes: 3
-  quorum: 2
-  guest_type: LXC only          # rationale in docs/04-lxc-vs-vm.md
-  live_migration: false         # a consequence of LXC-only
-  ha_groups: none
+    note: drives currently removed - backups had no target during the migration
 
 guests:
+
+  - vmid: 100
+    name: jellyfin
+    node: pve2
+    type: lxc
+    network: lan
+    bridge: vmbr0
+    purpose: media playback
+    note: deliberately NOT in the DMZ - it is not internet-facing
 
   - vmid: 101
     name: casaos
     node: pve
     type: lxc
+    network: lan
     address: 192.168.178.59
     ports: [90]
     hostname: casa.theminddev.com
@@ -113,6 +156,7 @@ guests:
     name: docker
     node: pve
     type: lxc
+    network: lan
     address: 192.168.178.87
     unprivileged: true
     features: nesting=1
@@ -120,30 +164,89 @@ guests:
 
   - vmid: 105
     name: pterodactyl-wings
-    node: pve
+    node: pve2
     type: lxc
-    address: 192.168.178.36
+    network: dmz
+    bridge: vmbr1
+    address: 10.10.10.20
+    gateway: 10.10.10.1
+    nameserver: 1.1.1.1
+    memory_mb: 6144
     unprivileged: true
     features: nesting=1
+    ports: [9090]                 # wings API, LAN-restricted DNAT only
     purpose: Pterodactyl daemon - runs game servers as Docker containers
 
   - vmid: 106
     name: pterodactyl-panel
-    node: pve
+    node: pve2
     type: lxc
-    address: 192.168.178.84
+    network: dmz
+    bridge: vmbr1
+    address: 10.10.10.22
+    gateway: 10.10.10.1
+    nameserver: 1.1.1.1
     ports: [80]
-    hostname: pter.theminddev.com
     purpose: Pterodactyl web panel
+    note: >
+      moved into the DMZ rather than allowed through it, so no game-hosting
+      service has any route into the house at all. APP_URL is the internal
+      address; MariaDB and Redis bind to 127.0.0.1 only.
 
   - vmid: 107
     name: amp-server
-    node: pve
+    node: pve2
     type: lxc
-    address: 192.168.178.32
-    ports: [8080]
+    network: dmz
+    bridge: vmbr1
+    address: 10.10.10.21
+    gateway: 10.10.10.1
+    nameserver: 1.1.1.1
+    memory_mb: 6144
     os: Ubuntu 24.04
+    ports: [8080]                 # AMP web UI, LAN-restricted DNAT only
     purpose: CubeCoders AMP game server manager
+    note: licence is bound to a machine fingerprint - reactivate after any move
+
+  - vmid: 200
+    name: opnsense
+    node: pve2
+    type: vm                      # FreeBSD - cannot be an LXC on a Linux host
+    os: OPNsense 26.7 (FreeBSD), UFS
+    memory_mb: 2048
+    cores: 2
+    disk_gb: 20
+    interfaces:
+      - {name: WAN, virtio: vtnet0, bridge: vmbr0, address: 192.168.178.60/24, gateway: 192.168.178.1, dhcp_server: off}
+      - {name: LAN, virtio: vtnet1, bridge: vmbr1, address: 10.10.10.1/24,     gateway: none,          dhcp_server: off}
+    purpose: the single chokepoint between the DMZ and the house
+    note: >
+      DHCP is off on BOTH legs. A second DHCP server on the house LAN is what
+      wrecked the earlier in-line router attempt.
+
+# ---------------------------------------------------------------------------
+#  Firewall policy, stated as intent. The rules themselves live in OPNsense.
+#  Exact WAN-forwarded port numbers are deliberately absent.
+#  See docs/16-firewalls-and-pf.md and runbooks/14-opnsense-dmz-firewall-rules.md
+# ---------------------------------------------------------------------------
+firewall:
+  engine: pf (FreeBSD packet filter), stateful
+  rules:
+    - {iface: LAN, order: 1, action: block, from: dmz,  to: 192.168.178.0/24, quick: true, why: the entire point of the project}
+    - {iface: LAN, order: 2, action: pass,  from: dmz,  to: any,              why: internet, Steam, package updates}
+    - {iface: floating, action: pass, from: 192.168.178.0/24, to: 10.10.10.0/24, why: so I can administer the segment - stateful, so it does not undo rule 1}
+    - {iface: WAN, action: pass, from: 192.168.178.0/24, to: "self:80", why: the OPNsense GUI, LAN-only}
+  nat:
+    reflection: enabled           # my PC shares a subnet with the WAN leg
+    admin_dnat:
+      - {to: 10.10.10.22, port: 80,   source: 192.168.178.0/24, service: pterodactyl panel}
+      - {to: 10.10.10.20, port: 9090, source: 192.168.178.0/24, service: wings API}
+    game_dnat: "source any, targets 10.10.10.20 and 10.10.10.21 - external port numbers not published"
+  known_gaps:
+    - no internal segmentation inside 10.10.10.0/24 - the three guests are neighbours
+    - egress from the DMZ is unrestricted
+    - a Proxmox host escape on pve2 defeats the whole design
+    - a default IPv6 allow rule remains on LAN and should be deleted
 
 services:
 
@@ -163,6 +266,7 @@ services:
     hostname: adguard.theminddev.com
     exposure: lan
     role: DNS resolver and filter for every device on the LAN
+    note: not reachable from the DMZ - guests there resolve against 1.1.1.1
 
   - name: Portainer 0
     host: pi
@@ -218,7 +322,7 @@ services:
     runtime: docker
     ports: {http: 80}
     hostname: apache.theminddev.com
-    exposure: internet          # the ONLY publicly reachable service
+    exposure: internet          # via the Cloudflare tunnel, no inbound rule
     role: public static site, reached through the Cloudflare tunnel
 
   - name: n8n
@@ -226,15 +330,12 @@ services:
     runtime: docker
     exposure: lan
     role: workflow automation
-    note: >
-      running in LXC 102, not on P2 as originally planned. Visible in
-      assets/screenshots/portainer-lxc102-containers.png.
 
   - name: FTP (pure-ftpd)
     host: lxc-102
     runtime: docker
     exposure: lan
-    role: file transfer for the game servers
+    role: file transfer
 
   - name: Portainer agent
     host: lxc-102
@@ -273,10 +374,10 @@ services:
 # Game servers currently defined. WAN forwards and external ports are
 # deliberately absent - see docs/99-security-notes.md.
 game_servers:
-  - {name: zomboid,         manager: Pterodactyl, host: 192.168.178.36, state: running}
-  - {name: minecraft,       manager: Pterodactyl, host: 192.168.178.36, state: stopped}
-  - {name: space-engineers, manager: AMP,         host: 192.168.178.32, state: running}
-  - {name: terraria,        manager: AMP,         host: 192.168.178.32, state: stopped}
+  - {name: zomboid,         manager: Pterodactyl, host: 10.10.10.20, network: dmz, state: running}
+  - {name: minecraft,       manager: Pterodactyl, host: 10.10.10.20, network: dmz, state: stopped}
+  - {name: space-engineers, manager: AMP,         host: 10.10.10.21, network: dmz, state: running}
+  - {name: terraria,        manager: AMP,         host: 10.10.10.21, network: dmz, state: stopped}
 
 external:
   - name: Cloudflare DNS
@@ -296,13 +397,17 @@ external:
     note: DNS-01 challenge, requested by Nginx Proxy Manager, no open port
 
 planned:
-  - {what: k3s server,        where: pve,  why: declarative workloads and rescheduling}
-  - {what: k3s agent,         where: pve2, why: worker}
-  - {what: k3s agent,         where: pve3, why: worker}
-  - {what: Nextcloud,         where: pve2, why: files and sync - runbook already written}
-  - {what: Jenkins,           where: pve2, why: CI/CD}
-  - {what: OpenStack,         where: pve3, why: private cloud lab}
-  - {what: Apache CloudStack, where: pve3, why: IaaS orchestration lab}
-  - {what: WireGuard,         where: router, why: replace the game-server port forwards}
-  - {what: Alertmanager,      where: lxc-102, why: nothing notifies me today}
-  - {what: offsite backup,    where: external, why: RAID is not a backup}
+  - {what: delete the leftover IPv6 allow rule, where: opnsense, why: it routes around the IPv4 block if the DMZ ever gets an address}
+  - {what: per-service DMZ subnets,   where: opnsense, why: wings, amp and panel are currently neighbours}
+  - {what: egress filtering from DMZ, where: opnsense, why: a compromised game server can currently reach anything outbound}
+  - {what: Proxmox TOTP 2FA,          where: cluster, why: root@pam with a password is the weakest remaining credential}
+  - {what: Omada ES210X-M2 switch,    where: rack, why: 802.1Q, so vmbr1 becomes a real tagged VLAN}
+  - {what: k3s server,                where: pve,  why: declarative workloads and rescheduling}
+  - {what: k3s agent,                 where: pve2, why: worker}
+  - {what: k3s agent,                 where: pve3, why: worker}
+  - {what: Nextcloud,                 where: pve2, why: files and sync - runbook already written}
+  - {what: Jenkins,                   where: pve2, why: CI/CD}
+  - {what: OpenStack,                 where: pve3, why: private cloud lab}
+  - {what: Apache CloudStack,         where: pve3, why: IaaS orchestration lab}
+  - {what: Alertmanager,              where: lxc-102, why: nothing notifies me today}
+  - {what: offsite backup,            where: external, why: RAID is not a backup}

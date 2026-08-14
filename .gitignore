@@ -76,7 +76,14 @@ desktop.ini
 *.swp
 *~
 
+# draw.io autosave/temp files
+.$*.dtmp
+*.bkp
+
 # Local scratch
 tmp/
 scratch/
 NOTES.local.md
+
+# scratch: unredacted screenshot originals, moved here rather than deleted
+_to_delete/
