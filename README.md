@@ -16,7 +16,7 @@ documented so the whole thing can be rebuilt from this repository alone.**
 ![Grafana](https://img.shields.io/badge/Grafana-F46800?style=flat-square&logo=grafana&logoColor=white)
 ![Nginx](https://img.shields.io/badge/Nginx_Proxy_Manager-009639?style=flat-square&logo=nginx&logoColor=white)
 
-**3 nodes · 12 CPU cores · 96 GB RAM · 5 LXC guests · 16 proxied hostnames · 33 W**
+**3 nodes · 12 CPU cores · 64 GB RAM · 5+ LXC guests · 16 proxied hostnames · 33 W**
 
 [Architecture](#architecture) · [Hardware](#the-hardware) ·
 [Services](#services) · [Wiki](docs/) · [Runbooks](runbooks/) ·
