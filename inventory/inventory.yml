@@ -19,7 +19,7 @@
 meta:
   name: theminddev-homelab
   domain: theminddev.com
-  updated: 2026-08-14
+  updated: 2026-08-19
 
 networks:
 
@@ -60,7 +60,8 @@ cluster:
   nodes: [pve, pve2, pve3]
   votes: 3
   quorum: 2
-  guest_type: LXC + one VM        # VM 200 is the firewall - docs/17-opnsense-concepts.md
+  pve_version: 9.2
+  guest_type: LXC + two VMs       # VM 103 (agents), VM 200 (firewall), VM 300 (Kali) - docs/17-opnsense-concepts.md
   live_migration: false           # a consequence of LXC-only workloads
   ha_groups: none
 
@@ -77,10 +78,14 @@ hardware:
       Replacing it is the prerequisite for a hardware DMZ.
 
   - id: switch
-    model: TP-Link TL-SG108 v3
-    role: 8-port gigabit, unmanaged
-    address: null                 # unmanaged, no management plane
-    note: cannot tag VLAN frames - the reason the DMZ is software, not hardware
+    model: TP-Link Omada ES210X-M2
+    role: 8-port 2.5 gigabit, managed (802.1Q capable)
+    address: null                 # no static IP on the switch itself
+    managed_via: lxc-108          # Omada SDN controller, 192.168.178.88:8043
+    note: >
+      replaced the unmanaged TP-Link TL-SG108 v3. VLAN tagging is not yet
+      configured - the LAN is still a flat /24 (see networks.lan.vlans) -
+      but 802.1Q is now possible, which the old switch could not do.
 
   - id: p1
     node: pve
@@ -162,6 +167,24 @@ guests:
     features: nesting=1
     purpose: the main Docker host of the cluster
 
+  - vmid: 103
+    name: agents
+    node: pve
+    type: vm
+    os: ubuntu-26.04-live-server
+    network: lan
+    address: 192.168.178.91
+    purpose: hosts the Hermes and Openclaw agent dashboards
+
+  - vmid: 108
+    name: omada
+    node: pve
+    type: lxc
+    network: lan
+    address: 192.168.178.88
+    ports: [8043]
+    purpose: Omada SDN controller - switch and VLAN management for the ES210X-M2
+
   - vmid: 105
     name: pterodactyl-wings
     node: pve2
@@ -223,6 +246,14 @@ guests:
     note: >
       DHCP is off on BOTH legs. A second DHCP server on the house LAN is what
       wrecked the earlier in-line router attempt.
+
+  - vmid: 300
+    name: kali
+    node: pve3
+    type: vm
+    os: Kali Linux
+    network: lan
+    purpose: cybersecurity / pentesting lab
 
 # ---------------------------------------------------------------------------
 #  Firewall policy, stated as intent. The rules themselves live in OPNsense.
@@ -325,12 +356,6 @@ services:
     exposure: internet          # via the Cloudflare tunnel, no inbound rule
     role: public static site, reached through the Cloudflare tunnel
 
-  - name: n8n
-    host: lxc-102
-    runtime: docker
-    exposure: lan
-    role: workflow automation
-
   - name: FTP (pure-ftpd)
     host: lxc-102
     runtime: docker
@@ -371,6 +396,26 @@ services:
     exposure: lan
     role: file sync between devices
 
+  # --- VM 103 "agents" on P1 ----------------------------------------------
+  - name: Hermes agent
+    host: vm-103
+    ports: {dashboard: 9119}
+    exposure: lan
+    role: agent dashboard
+
+  - name: Openclaw agent
+    host: vm-103
+    ports: {dashboard: 18789}
+    exposure: lan
+    role: agent dashboard
+
+  # --- LXC 108 "omada" on P1 -----------------------------------------------
+  - name: Omada SDN Controller
+    host: lxc-108
+    ports: {https: 8043}
+    exposure: lan
+    role: switch and VLAN management for the ES210X-M2
+
 # Game servers currently defined. WAN forwards and external ports are
 # deliberately absent - see docs/99-security-notes.md.
 game_servers:
@@ -382,7 +427,7 @@ game_servers:
 external:
   - name: Cloudflare DNS
     role: authoritative DNS for theminddev.com
-    note: wildcard A record, DNS-only (grey cloud), points at an RFC1918 address
+    note: wildcard A record (*.theminddev.com), DNS-only (grey cloud), points at the Pi (.178)
 
   - name: Cloudflare Tunnel
     role: publishes exactly one hostname
@@ -401,12 +446,12 @@ planned:
   - {what: per-service DMZ subnets,   where: opnsense, why: wings, amp and panel are currently neighbours}
   - {what: egress filtering from DMZ, where: opnsense, why: a compromised game server can currently reach anything outbound}
   - {what: Proxmox TOTP 2FA,          where: cluster, why: root@pam with a password is the weakest remaining credential}
-  - {what: Omada ES210X-M2 switch,    where: rack, why: 802.1Q, so vmbr1 becomes a real tagged VLAN}
   - {what: k3s server,                where: pve,  why: declarative workloads and rescheduling}
   - {what: k3s agent,                 where: pve2, why: worker}
   - {what: k3s agent,                 where: pve3, why: worker}
-  - {what: Nextcloud,                 where: pve2, why: files and sync - runbook already written}
-  - {what: Jenkins,                   where: pve2, why: CI/CD}
+  - {what: Nextcloud,                 where: pve3, why: files and sync - runbook already written}
+  - {what: Jenkins,                   where: pve3, why: CI/CD}
+  - {what: n8n,                       where: pve3, why: workflow automation - moved off lxc-102}
   - {what: OpenStack,                 where: pve3, why: private cloud lab}
   - {what: Apache CloudStack,         where: pve3, why: IaaS orchestration lab}
   - {what: Alertmanager,              where: lxc-102, why: nothing notifies me today}
