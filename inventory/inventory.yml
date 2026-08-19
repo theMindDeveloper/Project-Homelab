@@ -131,10 +131,9 @@ hardware:
   - id: nas
     model: UGREEN DH4300 Plus
     os: UGOS Pro
-    address: 192.168.178.49
-    disks: 1 TB Basic/Btrfs (separate, detachable), 2 x 6 TB RAID 1/EXT4 (~6 TB usable)
+    address: 192.168.178.79
+    disks: 2 TB Basic/Btrfs (separate, detachable), 2 x 6 TB RAID 1/EXT4 (~6 TB usable)
     role: media, photos, backup target, Docker host
-    note: drives currently removed - backups had no target during the migration
 
 guests:
 
@@ -395,6 +394,13 @@ services:
     runtime: docker
     exposure: lan
     role: file sync between devices
+
+  - name: MeTube
+    host: nas
+    runtime: docker
+    ports: {http: 45333}
+    exposure: lan
+    role: video downloader (youtube-dl web UI)
 
   # --- VM 103 "agents" on P1 ----------------------------------------------
   - name: Hermes agent
