@@ -55,7 +55,7 @@ pages:
                     timeout: 5s
                   - title: Jellyfin
                     url: https://jelly.theminddev.com/web/#/home
-                    check-url: http://192.168.178.49:8096/health
+                    check-url: http://192.168.178.79:8096/health
                     icon: "si:jellyfin"
                     timeout: 5s
                   - title: "NPM"
@@ -88,6 +88,10 @@ pages:
                     check-url: https://192.168.178.87:9443/api/status
                     icon: "si:portainer"
                     allow-insecure: true
+                  - title: "Apache"
+                    url: https://apache.theminddev.com
+                    check-url: http://192.168.178.87:80
+                    icon: "si:apache"
 
               - type: monitor
                 title: Applications
@@ -98,19 +102,30 @@ pages:
                     check-url: http://192.168.178.178:8000
                     icon: "si:adguard"
                   - title: "AMP"
-                    url: https://amp.theminddev.com
-                    check-url: http://192.168.178.32:8080
+                    # amp-server (guest 107) lives in the DMZ (10.10.10.21).
+                    # Reachable from here because of the floating firewall
+                    # rule that passes 192.168.178.0/24 -> 10.10.10.0/24 for
+                    # admin access - see docs/16-firewalls-and-pf.md.
+                    url: http://10.10.10.21:8080
+                    check-url: http://10.10.10.21:8080
                     icon: "mdi:server"
                   - title: "CasaOS"
                     url: https://casa.theminddev.com
                     check-url: http://192.168.178.59:90
                     icon: "mdi:server"
                     alt-status-codes: [301, 302, 303, 307, 308, 401, 403]
-                  - title: "Pterodactyl"
-                    url: http://192.168.178.84
-                    check-url: http://192.168.178.84:80
+                  - title: "Pterodactyl Panel"
+                    # pterodactyl-panel (guest 106), also in the DMZ.
+                    url: http://10.10.10.22
+                    check-url: http://10.10.10.22:80
                     icon: "mdi:gamepad-variant"
                     alt-status-codes: [301, 302, 303, 307, 308, 401, 403]
+                  - title: "Omada Controller"
+                    url: https://192.168.178.88:8043
+                    check-url: https://192.168.178.88:8043
+                    icon: "si:tp-link"
+                    # self-signed certificate, same as Proxmox and Portainer.
+                    allow-insecure: true
 
           # The three cluster nodes. A red tile here means the node is down or
           # has lost quorum; `pvecm status` on any surviving node says which.
@@ -125,14 +140,56 @@ pages:
                 allow-insecure: true
               - title: "P2"
                 url: https://p2.theminddev.com
-                check-url: https://192.168.178.50:8006/
+                check-url: https://192.168.178.77:8006/
                 icon: "si:proxmox"
                 allow-insecure: true
               - title: "P3"
                 url: https://p3.theminddev.com
-                check-url: https://192.168.178.77:8006/
+                check-url: https://192.168.178.50:8006/
                 icon: "si:proxmox"
                 allow-insecure: true
+              - title: "OPNsense"
+                # VM 200, the DMZ firewall. WAN leg address - see inventory.yml.
+                # Verify the GUI port against your build before relying on this
+                # tile; OPNsense defaults to 443, this repo's firewall notes
+                # mention 80.
+                url: https://192.168.178.60
+                check-url: https://192.168.178.60
+                icon: "si:opnsense"
+                allow-insecure: true
+
+          # NAS services. Immich and Syncthing default ports are used below -
+          # confirm against your actual container port mappings and adjust.
+          - type: monitor
+            title: NAS
+            cache: 1m
+            sites:
+              - title: "Immich"
+                url: http://192.168.178.79:2283
+                check-url: http://192.168.178.79:2283/api/server/ping
+                icon: "si:immich"
+              - title: "Syncthing"
+                url: http://192.168.178.79:8384
+                check-url: http://192.168.178.79:8384/rest/noauth/health
+                icon: "si:syncthing"
+              - title: "MeTube"
+                url: http://192.168.178.79:45333
+                check-url: http://192.168.178.79:45333
+                icon: "mdi:youtube"
+
+          # VM 103 "agents" - Hermes and Openclaw dashboards.
+          - type: monitor
+            title: Agents
+            cache: 1m
+            sites:
+              - title: "Hermes agent"
+                url: http://192.168.178.91:9119
+                check-url: http://192.168.178.91:9119
+                icon: "mdi:robot"
+              - title: "Openclaw agent"
+                url: http://192.168.178.91:18789
+                check-url: http://192.168.178.91:18789
+                icon: "mdi:robot"
 
           - type: bookmarks
             title: DietPi
@@ -171,20 +228,49 @@ pages:
                   - title: Portainer 1
                     description: port1.theminddev.com
                     url: https://port1.theminddev.com
+                  - title: Apache
+                    description: apache.theminddev.com
+                    url: https://apache.theminddev.com
               - title: Applications
                 links:
                   - title: AdGuard
                     description: adguard.theminddev.com
                     url: https://adguard.theminddev.com
                   - title: AMP
-                    description: amp.theminddev.com
-                    url: https://amp.theminddev.com
+                    description: 10.10.10.21:8080 (DMZ)
+                    url: http://10.10.10.21:8080
                   - title: CasaOS
                     description: casa.theminddev.com
                     url: https://casa.theminddev.com
-                  - title: Pterodactyl
-                    description: 192.168.178.84
-                    url: http://192.168.178.84
+                  - title: Pterodactyl Panel
+                    description: 10.10.10.22 (DMZ)
+                    url: http://10.10.10.22
+                  - title: Omada Controller
+                    description: 192.168.178.88:8043
+                    url: https://192.168.178.88:8043
+              - title: NAS
+                links:
+                  - title: Immich
+                    description: 192.168.178.79:2283
+                    url: http://192.168.178.79:2283
+                  - title: Syncthing
+                    description: 192.168.178.79:8384
+                    url: http://192.168.178.79:8384
+                  - title: MeTube
+                    description: 192.168.178.79:45333
+                    url: http://192.168.178.79:45333
+                  - title: FTP (pure-ftpd)
+                    description: ftp://192.168.178.87 - no HTTP health check
+                    url: "#"
+                    hide-arrow: true
+              - title: Agents
+                links:
+                  - title: Hermes agent
+                    description: 192.168.178.91:9119
+                    url: http://192.168.178.91:9119
+                  - title: Openclaw agent
+                    description: 192.168.178.91:18789
+                    url: http://192.168.178.91:18789
               - title: Hardware
                 links:
                   - title: P1
@@ -196,6 +282,9 @@ pages:
                   - title: P3
                     description: p3.theminddev.com
                     url: https://p3.theminddev.com
+                  - title: OPNsense
+                    description: 192.168.178.60
+                    url: https://192.168.178.60
                   - title: DietPi
                     description: 192.168.178.178
                     url: "#"
