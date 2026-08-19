@@ -73,6 +73,7 @@ Thumbs.db
 desktop.ini
 .vscode/
 .idea/
+.obsidian/
 *.swp
 *~
 
