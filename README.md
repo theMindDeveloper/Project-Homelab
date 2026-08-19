@@ -5,7 +5,7 @@
 **A three-node Proxmox VE cluster, a Raspberry Pi ingress layer and a NAS —
 documented so the whole thing can be rebuilt from this repository alone.**
 
-<img src="assets/photos/rack-front-v2.jpg" alt="The rack: TP-Link Omada ES210X-M2 switch, Raspberry Pi 5, and three Lenovo ThinkCentre M710q nodes" width="380">
+<img src="assets/photos/rack-front-v2.2.jpg" alt="The rack: TP-Link Omada ES210X-M2 switch, Raspberry Pi 5, and three Lenovo ThinkCentre M710q nodes" width="380">
 
 ![Proxmox VE](https://img.shields.io/badge/Proxmox_VE-E57000?style=flat-square&logo=proxmox&logoColor=white)
 ![Debian](https://img.shields.io/badge/Debian_12-A81D33?style=flat-square&logo=debian&logoColor=white)
