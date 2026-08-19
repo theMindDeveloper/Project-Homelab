@@ -45,7 +45,7 @@ The design goal is that the lab could be rebuilt from this repository alone.
 
 ## Architecture
 
-![Architecture diagram](diagrams/homelab-2.png)
+![Architecture diagram](diagrams/homelab-3.png)
 
 *Editable source: [`diagrams/homelab.drawio`](diagrams/homelab.drawio)*
 
