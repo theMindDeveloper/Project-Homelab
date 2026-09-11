@@ -79,14 +79,33 @@ container, published as 8000, so the admin UI ends up at
 
 ### Upstream resolvers
 
+Settings → DNS settings. Updated September 2026, see
+[the privacy update](../docs/reports/2026-09-11-privacy-update.md):
+
 ```
-https://dns.cloudflare.com/dns-query
 https://dns.quad9.net/dns-query
+tls://dns.quad9.net
+[/fritz.box/]192.168.178.1
 ```
 
-DNS-over-HTTPS upstream means the queries AdGuard forwards are encrypted, so the
-ISP sees that you resolve names but not which. Queries from your devices *to*
-AdGuard are still plain UDP on the LAN, which is a reasonable place to stop.
+| Line / field | Value | Why |
+|---|---|---|
+| line 1 | Quad9 over **DoH** (port 443) | encrypted upstream |
+| line 2 | Quad9 over **DoT** (port 853) | encrypted backup, AdGuard uses the faster one |
+| line 3 | `[/fritz.box/]192.168.178.1` | conditional upstream: router names go to the router, not to Quad9 |
+| Bootstrap DNS | `9.9.9.9`, `149.112.112.112` | plain lookup of `dns.quad9.net` itself, only used for that |
+| Private reverse DNS | `192.168.178.1` | device names in the query log |
+| DNSSEC | on | rejects forged answers |
+
+Click **Test upstreams**, then **Apply**.
+
+The upstream leg is encrypted, so the ISP sees that AdGuard talks to Quad9 but
+not which names. Queries from devices *to* AdGuard stay plain UDP on the LAN,
+which is fine because they never leave the house. Blocking is unaffected:
+AdGuard checks its blocklists before anything goes upstream.
+
+Not Mullvad's public DNS: it shuts down on 2 November 2026. Background in
+[`docs/21-encrypted-dns.md`](../docs/21-encrypted-dns.md).
 
 ### Blocklists
 
@@ -136,6 +155,24 @@ dig @192.168.178.178 grafana.theminddev.com      # expect 192.168.178.178
 Then open the query log in the UI. Every device on the network should be
 appearing within a few minutes.
 
+### Is the upstream really encrypted?
+
+The dashboard's **Top upstreams** card (or the Upstream field of a query log
+entry) shows which line answered. The real proof is on the Pi:
+
+```bash
+sudo apt install -y tcpdump
+
+# plain DNS leaving the house: should stay (almost) empty while browsing
+sudo tcpdump -ni any 'port 53 and not net 192.168.178.0/24'
+
+# encrypted DNS to Quad9: should show packets on .443 (DoH) and/or .853 (DoT)
+sudo tcpdump -ni any 'host 9.9.9.9 or host 149.112.112.112'
+```
+
+From a client, an extended test on dnsleaktest.com should list only Quad9
+resolvers. That proves *who* answers, not that it is encrypted.
+
 ---
 
 ## If it goes wrong
@@ -144,7 +181,9 @@ appearing within a few minutes.
 |---|---|---|
 | "address already in use" on 53 | `systemd-resolved` | step 1 |
 | clients still use the old DNS | DHCP lease not renewed | renew, or reboot the client |
-| one device ignores it | DNS-over-HTTPS in the browser | disable it in browser settings |
+| one device ignores it | DNS-over-HTTPS in the browser, or the FRITZ!Box handing out itself as IPv6 DNS | disable it in browser settings, check the DNSv6 setting on the router |
+| "could not be used" in Test upstreams | clock, bootstrap, blocked port, or typo | [troubleshooting](../docs/10-troubleshooting.md#adguard-says-an-upstream-could-not-be-used) |
+| `*.fritz.box` names stop resolving | conditional upstream line missing | add `[/fritz.box/]192.168.178.1` |
 | a site is broken | over-aggressive blocklist | find it in the query log, add an exception |
 | nothing resolves anywhere | this container | `docker compose ps`, and set a client to 1.1.1.1 meanwhile |
 

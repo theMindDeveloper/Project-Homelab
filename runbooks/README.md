@@ -69,6 +69,7 @@ and the story of doing it for real is
 | 05 | [Glance dashboard](05-glance-dashboard.md) | 15 min |
 | 07 | [Nextcloud](07-nextcloud.md) — *planned, not yet deployed* | 60 min |
 | 10 | [Prometheus, Grafana and the exporters](10-monitoring-stack.md) | 45 min |
+| 20 | [qBittorrent behind gluetun on the NAS](20-qbittorrent-behind-gluetun.md) | 30 min |
 
 ### Operations
 

@@ -61,6 +61,15 @@ before it.
 | 19 | [LXC migration and resources](19-lxc-migration-and-resources.md) | offline migration, memory caps vs reservations, thin provisioning |
 | 20 | [Game server hosting](20-game-server-hosting.md) | the four places Pterodactyl stores an address, and AMP's machine-bound licence |
 
+### Privacy, after the September 2026 update
+
+Written after encrypting DNS and putting torrents behind a VPN. 21 first.
+
+| | Page | What it answers |
+|---|---|---|
+| 21 | [Encrypted DNS](21-encrypted-dns.md) | DoH vs DoT, who actually encrypts what, and what it still does not hide |
+| 22 | [VPNs and kill switches](22-vpns-and-kill-switches.md) | where a VPN can live in this network, why gluetun, and the gotchas of `network_mode: service:` |
+
 ### Operating it
 
 | | Page | What it answers |
@@ -75,6 +84,7 @@ before it.
 | Date | Report | What it covers |
 |---|---|---|
 | 2026-08-13 | [DMZ migration](reports/2026-08-13-dmz-migration.md) | the full narrative: options rejected, every step, every problem hit, and an honest security grade |
+| 2026-09-11 | [Privacy update](reports/2026-09-11-privacy-update.md) | encrypted upstream DNS on AdGuard, qBittorrent on the NAS behind Mullvad with a kill switch |
 
 The [reports index](reports/) explains why these are a third kind of page.
 
@@ -96,6 +106,12 @@ The [reports index](reports/) explains why these are a third kind of page.
 [Network segmentation](12-network-segmentation.md) →
 [the migration report](reports/2026-08-13-dmz-migration.md) →
 [runbooks 12 to 18](../runbooks/)
+
+**Here for the DNS and VPN stuff:**
+[Encrypted DNS](21-encrypted-dns.md) →
+[VPNs and kill switches](22-vpns-and-kill-switches.md) →
+[the privacy report](reports/2026-09-11-privacy-update.md) →
+[runbook 20](../runbooks/20-qbittorrent-behind-gluetun.md)
 
 **Know Docker, new to Proxmox:**
 [LXC or VM](04-lxc-vs-vm.md) → [Proxmox cheat sheet](03-proxmox-cheatsheet.md) →

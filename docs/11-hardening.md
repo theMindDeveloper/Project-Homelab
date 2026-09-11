@@ -131,6 +131,21 @@ AdGuard Home resolves for every device. Blocks ad and tracker domains, and
 incidentally a good share of malware command-and-control domains, for devices
 that cannot run any security software of their own.
 
+### Encrypted upstream DNS
+
+Since September 2026 AdGuard forwards to Quad9 over DoH and DoT instead of
+plain DNS. This is about privacy more than attacks: the ISP no longer sees
+which names the house looks up, and nobody on the path can quietly change an
+answer. It does not hide which IPs are contacted afterwards.
+→ [Encrypted DNS](21-encrypted-dns.md)
+
+### Downloads only through a VPN, with a kill switch
+
+qBittorrent on the NAS runs inside gluetun's network namespace, so it has no
+network except the Mullvad tunnel. Stop the tunnel and it is offline, which was
+tested by stopping gluetun. Nothing else in the house goes through the VPN.
+→ [VPNs and kill switches](22-vpns-and-kill-switches.md)
+
 ### Automatic security updates
 
 `unattended-upgrades` on the Debian hosts. Images are pulled and recreated

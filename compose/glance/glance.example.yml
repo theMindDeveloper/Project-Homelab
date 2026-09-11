@@ -296,6 +296,9 @@ pages:
 #  `dns-stats` against AdGuard, and `server-stats` against a remote agent,
 #  both need credentials. The moment a credential enters this file it stops
 #  being publishable verbatim, which is most of its value. If they get added,
-#  they use ${VARIABLES} from a .env and this file becomes glance.example.yml
-#  in the proper sense.
+#  they use environment variables from a .env and this file becomes
+#  glance.example.yml in the proper sense.
+#  NOTE: avoid writing literal ${...} even in comments - Glance expands
+#  variables in the raw file before parsing, so a stray ${VARIABLES} in a
+#  comment will fail to resolve and crash-loop the container.
 # ---------------------------------------------------------------------------

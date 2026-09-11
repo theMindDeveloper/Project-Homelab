@@ -45,7 +45,7 @@ The design goal is that the lab could be rebuilt from this repository alone.
 
 ## Architecture
 
-![Architecture diagram](diagrams/homelab-3.png)
+![Architecture diagram](diagrams/homelab-4.png)
 
 *Editable source: [`diagrams/homelab.drawio`](diagrams/homelab.drawio)*
 
@@ -125,6 +125,13 @@ that broke:
 Cloudflare provides authoritative DNS for the domain and the tunnel through
 which exactly one service is published to the internet. AdGuard Home, also on
 the Raspberry Pi, is the resolver for every device on the network.
+
+Since September 2026 AdGuard forwards to **Quad9 over DoH and DoT**, so the ISP
+sees that the house uses Quad9 but not which names it looks up. On the NAS,
+qBittorrent runs inside a **gluetun** container and can only reach the internet
+through a Mullvad WireGuard tunnel: if the tunnel is down, it has no network at
+all. What that does and does not protect:
+[`docs/reports/2026-09-11-privacy-update.md`](docs/reports/2026-09-11-privacy-update.md).
 
 ---
 
@@ -270,6 +277,11 @@ including for devices that cannot run filtering software themselves.*
 *The same figure describes the primary single point of failure: all 123,095
 queries were served by one container on one Raspberry Pi.*
 
+Upstream is Quad9, encrypted (DoH and DoT), with a conditional upstream that
+sends `*.fritz.box` to the router. Setup in
+[runbook 03](runbooks/03-adguard-home-dns.md#upstream-resolvers), background in
+[`docs/21-encrypted-dns.md`](docs/21-encrypted-dns.md).
+
 ### P2 `pve2` · game hosting, inside the DMZ
 
 Since August 2026 the entire game stack lives in `10.10.10.0/24`, behind
@@ -310,6 +322,7 @@ information about which ports are externally reachable.
 | Jellyfin (`jelly.`) | media server — runs next to the library at `192.168.178.49`, so no network share and no passthrough problem |
 | Immich | photo library |
 | Syncthing | file sync between devices |
+| qBittorrent + gluetun | torrents, **only** through Mullvad. qBittorrent lives in gluetun's network namespace, web UI on `:8085` is published on gluetun. [compose](compose/torrent-vpn/docker-compose.example.yml) · [runbook 20](runbooks/20-qbittorrent-behind-gluetun.md) |
 
 All hostnames are under `theminddev.com`. The machine-readable version of every
 table on this page is [`inventory/inventory.yml`](inventory/inventory.yml).
@@ -391,6 +404,8 @@ asked for.
 | 09 | [Linux administration](docs/09-linux-admin.md) | systemd, journald, disks, network, SSH, permissions |
 | 10 | [Troubleshooting](docs/10-troubleshooting.md) | organised by **symptom**, because that is what you have |
 | 11 | [Hardening](docs/11-hardening.md) | the threat model, what is done, what deliberately is not |
+| 21 | [Encrypted DNS](docs/21-encrypted-dns.md) | DoH vs DoT, who encrypts what, and what it still does not hide |
+| 22 | [VPNs and kill switches](docs/22-vpns-and-kill-switches.md) | where a VPN can live in this network, and why torrents go through gluetun |
 | 99 | [Security notes](docs/99-security-notes.md) | what this repository publishes, and what it never will |
 
 ### The runbooks — [`runbooks/`](runbooks/)
@@ -410,6 +425,7 @@ asked for.
 | 09 | [The backup restore drill](runbooks/09-backup-restore-drill.md) — quarterly | 30 min |
 | 10 | [Prometheus, Grafana and the exporters](runbooks/10-monitoring-stack.md) | 45 min |
 | 11 | [Rebuild the lab from zero](runbooks/11-rebuild-from-zero.md) | a weekend |
+| 20 | [qBittorrent behind gluetun on the NAS](runbooks/20-qbittorrent-behind-gluetun.md) | 30 min |
 
 **Start with [Runbook 02](runbooks/02-portainer-on-a-new-lxc.md)** if you read
 one thing. It goes from an empty Proxmox node to a service in a browser with a
@@ -431,6 +447,7 @@ diagrams/
 docs/                        the wiki: what things are and why
   12-network-segmentation.md   why a flat network cannot be fixed with rules
   13 .. 20                     addressing, bridges, NAT, firewalls, OPNsense, FreeBSD
+  21, 22                       encrypted DNS, VPNs and kill switches
   reports/                     dated write-ups of large changes, including what broke
 runbooks/                    step-by-step procedures
   12 .. 18                     build the DMZ, seal it, and recover it
@@ -462,6 +479,7 @@ Marked with a dashed border in the diagram. None of this is running yet.
 | **OpenStack** | P3 | private cloud lab |
 | **Apache CloudStack** | P3 | IaaS orchestration lab |
 | **Alertmanager** | LXC 102 | no automated notification exists today |
+| **VPN lane** | OPNsense + Omada switch | WireGuard to Mullvad on OPNsense and a VLAN whose traffic can only leave through it, so chosen devices get a VPN without an app |
 | **Egress filtering** | OPNsense | the game segment can currently reach anything outbound |
 | **A subnet per service** | OPNsense | wings, AMP and the panel are currently neighbours |
 | **Omada ES210X-M2** | rack | 802.1Q, so `vmbr1` becomes a real tagged VLAN and the firewall stops depending on the host it protects |

@@ -31,6 +31,7 @@ modesty; they are the parts that are load-bearing when something breaks.
 | Date | Report | Summary |
 |---|---|---|
 | 2026-08-13 | [DMZ migration](2026-08-13-dmz-migration.md) | isolating internet-facing game servers from the house LAN using a software DMZ on Proxmox |
+| 2026-09-11 | [Privacy update](2026-09-11-privacy-update.md) | encrypted upstream DNS (Quad9 over DoH/DoT) and qBittorrent on the NAS only through Mullvad via gluetun |
 
 ---
 

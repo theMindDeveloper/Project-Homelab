@@ -37,7 +37,8 @@ the list in the README rather than dressed up as a choice.
 ```mermaid
 flowchart TD
     A[Browser on the LAN] -->|grafana.theminddev.com| B[AdGuard Home<br/>192.168.178.178:53]
-    B -->|forwards, uncached| C[Cloudflare DNS<br/>authoritative for theminddev.com]
+    B -->|encrypted upstream<br/>DoH or DoT| Q[Quad9 resolver]
+    Q --> C[Cloudflare DNS<br/>authoritative for theminddev.com]
     C -->|wildcard A record<br/>DNS only, not proxied| D[192.168.178.178]
     D --> E[Nginx Proxy Manager<br/>:443]
     E -->|terminates TLS<br/>Let's Encrypt, DNS-01| F[proxy_pass to<br/>192.168.178.87:3000]
@@ -54,7 +55,8 @@ Two paths, and the asymmetry between them is the interesting part.
 
 1. A client asks **AdGuard Home** on the Pi, because the router hands it out as
    the only DNS server via DHCP.
-2. AdGuard forwards to Cloudflare, which is authoritative for `theminddev.com`.
+2. AdGuard forwards the query **encrypted** (DoH or DoT) to Quad9, which asks
+   Cloudflare, the authoritative server for `theminddev.com`.
 3. The wildcard `A` record for `*.theminddev.com` returns **`192.168.178.178`**
    — the Raspberry Pi. The record is set to **DNS only** (grey cloud), so
    Cloudflare returns the address as-is rather than proxying.
@@ -111,11 +113,17 @@ container, one Raspberry Pi, no second resolver.*
 ### The resolution chain here
 
 ```
-client --> AdGuard Home (.178) --> Cloudflare (1.1.1.1) --> authoritative
-             |
-             +-- blocklists: ad and tracker domains answered NXDOMAIN
-             +-- local rewrites, if any
+client --plain--> AdGuard Home (.178) ==DoH/DoT==> Quad9 --> authoritative
+                    |
+                    +-- blocklists: ad and tracker domains answered NXDOMAIN
+                    +-- local rewrites, if any
+                    +-- *.fritz.box --> FRITZ!Box (conditional upstream)
 ```
+
+Since September 2026 the upstream leg is encrypted: the ISP sees that AdGuard
+talks to Quad9, not which names. The device-to-AdGuard leg stays plain because
+it never leaves the LAN. What that does and does not hide:
+[Encrypted DNS](21-encrypted-dns.md).
 
 Every device on the LAN uses AdGuard, because the router's DHCP hands out
 `192.168.178.178` as the DNS server. That gives network-wide filtering with no
@@ -293,6 +301,7 @@ which is what Nextcloud's `TRUSTED_PROXIES` is for.
 | 9442 / 9443 | Portainer | LAN |
 | 2283 | Immich | LAN |
 | 8096 | Jellyfin | LAN |
+| 8085 | qBittorrent web UI, published on gluetun (NAS) | LAN |
 
 The WAN port forwards for the game servers are **not** listed. Publishing "these
 ports are open" next to an address is the one thing this repository does not do;

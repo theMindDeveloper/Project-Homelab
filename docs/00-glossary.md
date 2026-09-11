@@ -25,6 +25,10 @@ accept. Empty means wings trusts only the panel URL it already knows and answers
 `403` to everything else, which presents as a console spinner.
 → [Game server hosting](20-game-server-hosting.md)
 
+**AllowedIPs**: the WireGuard setting that decides which destinations go into
+the tunnel. `0.0.0.0/0` means everything, which is what turns a tunnel into a
+full VPN. → [VPNs and kill switches](22-vpns-and-kill-switches.md)
+
 **Bind mount** — a host directory or file mounted into a container at a chosen
 path. Contrast with a *named volume*. Rule used here: bind mounts for
 configuration, named volumes for state.
@@ -33,6 +37,10 @@ configuration, named volumes for state.
 such as an RFC1918 address arriving on a WAN interface. OPNsense blocks bogons
 by default, which locks you out when the "WAN" side faces your own house.
 → [OPNsense concepts](17-opnsense-concepts.md)
+
+**Bootstrap DNS**: the plain resolver AdGuard uses only to find the IP of an
+encrypted upstream like `dns.quad9.net`. Safe, because the TLS certificate is
+checked right after. → [Encrypted DNS](21-encrypted-dns.md)
 
 **Bridge (`vmbr0`)** — a virtual switch on the Proxmox host. Guests attach to it
 and appear on the physical LAN as if they had their own network card. `vmbr1` is the same thing created with
@@ -59,6 +67,10 @@ plaintext, which is the trade.
 
 **Compose** → [Docker Compose](02-docker-compose.md)
 
+**Conditional upstream**: an AdGuard line like `[/fritz.box/]192.168.178.1`:
+names under that domain go to a specific server instead of the normal upstream.
+Keeps router hostnames working and inside the house.
+
 **Corosync** — the messaging layer Proxmox clustering runs on. It carries the
 votes that decide quorum. Sensitive to latency and to clock drift; when the
 cluster misbehaves, corosync is usually why.
@@ -84,6 +96,13 @@ is still a peer of everything else on the LAN.
 of serving a file over HTTP. The only way to get a **wildcard** certificate, and
 the reason this lab needs nothing inbound.
 
+**DNS leak test**: a site that looks up random names and shows which resolvers
+arrive at its end. Shows *who* resolves your DNS, not whether it was encrypted.
+
+**DoH / DoT**: DNS over HTTPS (port 443) and DNS over TLS (port 853). The same
+DNS question inside TLS, so the network in between cannot read it. Here only
+the AdGuard to Quad9 leg uses it. → [Encrypted DNS](21-encrypted-dns.md)
+
 **Docker** — packaging and running a single application as an isolated process
 on the host kernel. → [Docker](01-docker.md)
 
@@ -108,6 +127,10 @@ container on a Linux host. → [FreeBSD basics](18-freebsd-basics.md)
 bookmarks in a YAML file. Answers "is anything red" in one second, which is why
 it gets looked at and Grafana does not.
 
+**gluetun**: a container that holds a VPN tunnel plus a firewall. Other
+containers join its network with `network_mode: service:gluetun` and then have
+no way out except the tunnel. → [VPNs and kill switches](22-vpns-and-kill-switches.md)
+
 **Grafana** — draws graphs from a data source. Stores dashboards, not metrics.
 
 **Image (Docker)** — a stack of read-only filesystem layers plus metadata. A
@@ -116,6 +139,10 @@ container is an image plus one thin writable layer.
 **Inode** — the metadata entry for a file. Finite and separate from disk space,
 which is why a disk can report "no space left" at 40% full.
 Diagnose with `df -i`.
+
+**Kill switch**: a rule that drops traffic which is not going through the VPN,
+so a dropped tunnel does not silently fall back to the real connection. The
+strongest version is having no other network at all.
 
 **LXC** — a container that holds a **whole Linux userland**, with systemd, apt
 and an IP address. Behaves like a lightweight server. Every guest in this
@@ -139,6 +166,11 @@ convenience feature for a router-on-a-stick topology, not a security setting.
 
 **Nesting (`nesting=1`)** — the Proxmox LXC feature that permits a container
 runtime *inside* the container. Without it, the Docker daemon will not start.
+
+**`network_mode: service:<name>`**: Compose option that puts a container into
+another container's network namespace instead of giving it its own. Its ports
+must be published on the other container, and it loses network when that one
+restarts until it is restarted too.
 
 **Nginx Proxy Manager (NPM)** — a web UI over nginx. Terminates TLS for every
 service in this lab and routes by `Host` header. Single point of failure for
@@ -206,6 +238,10 @@ between the failed attempt and the working one.
 ZFS, and it **grows as the guest writes**. A forgotten snapshot is a classic way
 to fill a pool.
 
+**SNI**: Server Name Indication, the hostname a client sends in plain text at
+the start of a TLS connection so the server picks the right certificate. Why
+encrypted DNS alone does not hide which sites you visit.
+
 **Source NAT (SNAT)** — rewriting where a packet came from, so many devices
 share one public address. Opens nothing, because it only happens for
 conversations you started.
@@ -231,6 +267,9 @@ change, not after.
 **Unprivileged container** — an LXC whose root maps to a high, powerless UID on
 the host (usually 100000). Root inside is nobody outside. The default here, and
 the reason bind mounts need UID mapping.
+
+**Upstream resolver**: the DNS server AdGuard forwards allowed queries to.
+Here Quad9, over DoH and DoT.
 
 **VirtIO** — a paravirtualised device: a fake network card that does not imitate
 any real chip and instead speaks a protocol designed for virtualisation. Much
@@ -259,6 +298,10 @@ the **house** is on the WAN side, which feels backwards and is correct.
 
 **Wildcard certificate** — one certificate covering `*.domain`. Requires DNS-01.
 Covers every internal service in this lab with a single renewal.
+
+**WireGuard**: a small, fast VPN protocol built on key pairs. A config has a
+private key, a tunnel address and `AllowedIPs`. The only protocol Mullvad
+supports since January 2026.
 
 **X-Forwarded-For / X-Forwarded-Proto** — headers a reverse proxy adds so the
 backend knows the real client address and the original scheme. Missing

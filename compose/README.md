@@ -58,6 +58,7 @@ somebody else's network.
 | [`nginx-proxy-manager/`](nginx-proxy-manager/) | Raspberry Pi | LAN |
 | [`adguard/`](adguard/) | Raspberry Pi | LAN |
 | [`nas-media/`](nas-media/) | NAS | LAN |
+| [`torrent-vpn/`](torrent-vpn/) | NAS | LAN web UI, internet only through Mullvad |
 | [`nextcloud/`](nextcloud/) | P2 | *planned* |
 
 ## Conventions applied to every file here

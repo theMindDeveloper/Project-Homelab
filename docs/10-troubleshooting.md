@@ -201,6 +201,25 @@ inherits the LXC's resolver, which is AdGuard. If AdGuard is down, every
 container on every host loses name resolution simultaneously, which looks like a
 much bigger failure than it is.
 
+### A container behind gluetun is unreachable or offline
+
+Two different situations that look the same:
+
+- **gluetun is stopped.** The containers using `network_mode: service:gluetun`
+  have no network and their web UI is gone. That is the kill switch working.
+- **gluetun was restarted, the others were not.** They are still attached to
+  the old namespace, which has no interfaces any more. Restart them after
+  gluetun is healthy.
+
+```bash
+docker logs gluetun | tail -n 20      # "Public IP address is ..." means the tunnel is up
+docker restart qbittorrent
+```
+
+If the web UI is unreachable while gluetun is running: the port has to be
+published on **gluetun**, and the LAN has to be in `FIREWALL_OUTBOUND_SUBNETS`.
+→ [VPNs and kill switches](22-vpns-and-kill-switches.md)
+
 ### The disk filled up
 
 ```bash
@@ -277,6 +296,44 @@ Immediate workaround on one machine: set DNS to `1.1.1.1` manually. Internal
 names stop working, the internet comes back.
 
 The real fix is a second resolver, which is on the list.
+
+### AdGuard says an upstream "could not be used"
+
+The message in **Test upstreams** is generic. An encrypted upstream needs a
+chain of things to work, so check them bottom up:
+
+```bash
+date -u                        # 1. clock: TLS rejects certificates if it is off
+getent hosts dns.quad9.net     # 2. can the Pi find the IP at all
+nc -zv 9.9.9.9 443             # 3. DoH port reachable
+nc -zv 9.9.9.9 853             # 3. DoT port reachable
+```
+
+Causes, in order:
+
+- a typo in the line (the DoH one needs the `/dns-query` path)
+- bootstrap DNS empty or pointing at AdGuard itself, so it cannot resolve the
+  upstream's hostname
+- the clock on the Pi is wrong
+- the port is blocked somewhere outbound
+
+If only the `https://` line fails and `tls://` works, layers 1 and 2 are fine
+and it is port 443 or the HTTPS side. AdGuard keeps working on the other line in
+the meantime, which is one reason to keep two.
+
+### The password manager offers every login on every subdomain
+
+Bitwarden (and so Vaultwarden) matches logins by **base domain** by default. It
+ignores the subdomain, so `p1.theminddev.com`, `p2.theminddev.com` and
+`vault.theminddev.com` all count as the same site. Same with services on one IP
+but different ports.
+
+Browser extension → Settings → Autofill → **Default URI match detection →
+Host**. Host compares the full hostname and the port. Then make sure each login
+has the full URL it is actually used on.
+
+It also does not fill on page load by default: click into the field and pick
+the login, or `Ctrl+Shift+L`.
 
 ### The certificate expired
 

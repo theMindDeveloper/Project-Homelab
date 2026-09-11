@@ -36,6 +36,7 @@ information that helps them reach *my* machines.
 | **MAC addresses** | Hardware fingerprinting, and they leak into IPv6 anyway. |
 | **Cloudflare tunnel token, tunnel ID, connector ID** | The token is a credential. The IDs are identifying. |
 | **The DuckDNS hostname** | It is a public DNS name that resolves to the current WAN address. Publishing it is the same as publishing the public IP, with the added convenience that it stays correct. |
+| **VPN keys and configs** | The WireGuard private key from the Mullvad `.conf` is a credential for my account. Compose examples use `${WIREGUARD_PRIVATE_KEY}`, the real value only lives in the UGOS project on the NAS. Same for the tunnel `Address`. |
 | **Exact software versions** | "Proxmox VE 8.x" is fine. "8.2.4" plus a published CVE is a shopping list. |
 | **Any secret** | API tokens, passwords, TLS private keys, SSH private keys, `.env` files, Vaultwarden exports, backup credentials. |
 | **Personal hostnames** | Devices are named by function, not by person or place. `docker-01`, not `<firstname>s-laptop-<city>`. |

@@ -19,7 +19,7 @@
 meta:
   name: theminddev-homelab
   domain: theminddev.com
-  updated: 2026-08-19
+  updated: 2026-09-11
 
 networks:
 
@@ -28,7 +28,8 @@ networks:
     subnet: 192.168.178.0/24
     gateway: 192.168.178.1        # FRITZ!Box 7590
     dns: 192.168.178.178          # AdGuard Home, authoritative for the LAN
-    upstream_dns: [1.1.1.1, 9.9.9.9]
+    upstream_dns: ["https://dns.quad9.net/dns-query", "tls://dns.quad9.net"]   # Quad9 over DoH + DoT since 2026-09-11
+    conditional_upstream: "[/fritz.box/]192.168.178.1"
     bridge: vmbr0                 # on every Proxmox node, real NIC attached
     vlans: none                   # flat /24 - see README "Known limitations"
     addressing: static            # DHCP is on, every lab host is pinned
@@ -296,6 +297,7 @@ services:
     hostname: adguard.theminddev.com
     exposure: lan
     role: DNS resolver and filter for every device on the LAN
+    upstream: Quad9, encrypted (DoH and DoT), bootstrap 9.9.9.9 / 149.112.112.112, DNSSEC on
     note: not reachable from the DMZ - guests there resolve against 1.1.1.1
 
   - name: Portainer 0
@@ -402,6 +404,25 @@ services:
     exposure: lan
     role: video downloader (youtube-dl web UI)
 
+  - name: gluetun
+    host: nas
+    runtime: docker
+    compose: compose/torrent-vpn/
+    ports: {qbittorrent_webui: 8085}   # published here, qBittorrent has no network of its own
+    exposure: lan
+    vpn: Mullvad, WireGuard, SERVER_COUNTRIES=Germany
+    role: VPN tunnel and firewall - the kill switch for qBittorrent
+
+  - name: qBittorrent
+    host: nas
+    runtime: docker
+    compose: compose/torrent-vpn/
+    network: service:gluetun      # internet only through the tunnel
+    data: /volume3/6TB_1/torrents
+    exposure: lan (web UI via gluetun)
+    role: torrent client
+    note: replaced the native UGOS app, which cannot sit behind gluetun
+
   # --- VM 103 "agents" on P1 ----------------------------------------------
   - name: Hermes agent
     host: vm-103
@@ -443,6 +464,14 @@ external:
     role: dynamic DNS, the router pushes the current WAN address
     note: hostname deliberately not published - see docs/99-security-notes.md
 
+  - name: Quad9
+    role: upstream DNS resolver for AdGuard
+    note: DoH (dns.quad9.net/dns-query) and DoT (dns.quad9.net:853)
+
+  - name: Mullvad VPN
+    role: VPN for qBittorrent on the NAS, through gluetun
+    note: WireGuard only, no port forwarding, 5 devices per account; keys never in this repo
+
   - name: Let's Encrypt
     role: TLS certificates
     note: DNS-01 challenge, requested by Nginx Proxy Manager, no open port
@@ -460,5 +489,6 @@ planned:
   - {what: n8n,                       where: pve3, why: workflow automation - moved off lxc-102}
   - {what: OpenStack,                 where: pve3, why: private cloud lab}
   - {what: Apache CloudStack,         where: pve3, why: IaaS orchestration lab}
+  - {what: VPN lane for chosen devices, where: opnsense + omada switch, why: "WireGuard to Mullvad on OPNsense, a VLAN, policy-based routing and a block rule as kill switch"}
   - {what: Alertmanager,              where: lxc-102, why: nothing notifies me today}
   - {what: offsite backup,            where: external, why: RAID is not a backup}

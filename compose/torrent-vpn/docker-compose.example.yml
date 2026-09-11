@@ -1,0 +1,73 @@
+# ---------------------------------------------------------------------------
+#  qBittorrent behind a VPN - runs on the NAS (UGREEN DH4300 Plus, UGOS Pro)
+#  Deployed as a UGOS Docker "Project", not with the container form.
+#
+#  gluetun holds the Mullvad WireGuard tunnel and a firewall. qBittorrent does
+#  not get its own network at all, it joins gluetun's network namespace. So its
+#  only way to the internet is the tunnel, and if the tunnel is down it has no
+#  internet. That is the kill switch, and it does not depend on a setting inside
+#  qBittorrent that I could forget.
+#
+#  Why this and not the native UGOS qBittorrent app: a native app runs on the
+#  NAS's normal network and cannot join a container's namespace.
+#
+#  Concepts: docs/22-vpns-and-kill-switches.md
+#  Steps:    runbooks/20-qbittorrent-behind-gluetun.md
+# ---------------------------------------------------------------------------
+services:
+
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    container_name: gluetun
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN                   # needed to create the tunnel and firewall rules
+    devices:
+      - /dev/net/tun:/dev/net/tun   # kernel device every VPN client needs
+    environment:
+      - VPN_SERVICE_PROVIDER=mullvad
+      - VPN_TYPE=wireguard          # Mullvad is WireGuard only since January 2026
+      # Both values come from the .conf file Mullvad's WireGuard config
+      # generator downloads. Address: only the IPv4 part, before the comma.
+      - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY}
+      - WIREGUARD_ADDRESSES=${WIREGUARD_ADDRESSES}
+      - SERVER_COUNTRIES=Germany
+      # Lets the house LAN through gluetun's firewall, otherwise the web UI
+      # is not reachable from my PC.
+      - FIREWALL_OUTBOUND_SUBNETS=192.168.178.0/24
+      - TZ=Europe/Berlin
+    ports:
+      # qBittorrent's web UI is published HERE, on gluetun, because
+      # qBittorrent has no network of its own to publish a port on.
+      # No torrent port is published: Mullvad has no port forwarding, so
+      # nothing from outside could reach it anyway.
+      - "8085:8085"
+    volumes:
+      - ${TORRENT_DIR}/gluetun:/gluetun
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    restart: unless-stopped
+    network_mode: "service:gluetun" # the important line: live inside gluetun's network
+    depends_on:
+      gluetun:
+        condition: service_healthy  # do not start before the tunnel is up
+    environment:
+      - PUID=${PUID}                # from `id` on the NAS
+      - PGID=${PGID}
+      - TZ=Europe/Berlin
+      - WEBUI_PORT=8085
+    volumes:
+      - ${TORRENT_DIR}/config:/config
+      - ${TORRENT_DIR}/downloads:/downloads
+
+# Volume syntax reminder:  <real folder on the NAS>:<path the app sees>
+# Only ever change the left side.
+#
+# On UGOS the real path is /volumeN/<shared folder>/<folder>. Leaving out the
+# shared folder makes UGOS offer to create a brand new shared folder, which is
+# the warning to cancel on.
+#
+# If gluetun is restarted on its own, restart qbittorrent afterwards. It is
+# still attached to the old, dead namespace and stays offline otherwise.
