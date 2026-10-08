@@ -1,0 +1,28 @@
+# CrowdSec reads its logs from Loki (no extra log agent, no file mounts).
+# The "type" label tells CrowdSec which parser to use.
+# WATCH ONLY: no bouncer is installed anywhere, so nothing is ever blocked.
+
+# SSH logins on LXC 102 (Debian 13 logs them as sshd-session in ssh.service)
+source: loki
+url: http://loki:3100
+query: '{host="lxc102", unit="ssh.service"}'
+wait_for_ready: 60s
+labels:
+  type: sshd
+---
+# Apache (stacks-webserver-1). Note: visitors via the Cloudflare tunnel show the
+# tunnel's IP, not the real visitor IP, until Apache gets mod_remoteip (phase 2).
+source: loki
+url: http://loki:3100
+query: '{host="lxc102", container="stacks-webserver-1"}'
+wait_for_ready: 60s
+labels:
+  type: apache2
+---
+# OPNsense firewall: only blocked packets (used for port-scan detection).
+source: loki
+url: http://loki:3100
+query: '{job="opnsense", action="block"}'
+wait_for_ready: 60s
+labels:
+  type: filterlog

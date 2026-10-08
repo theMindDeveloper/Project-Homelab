@@ -19,6 +19,8 @@ Four components, each doing one thing:
 | **Prometheus** | stores all of it, over time | LXC 102 |
 | **Grafana** | draws it | LXC 102 |
 | **Glance** | is anything down, right now? | LXC 102 |
+| **Loki + Alloy** | what did the logs say? SSH, containers, firewall | LXC 102 |
+| **CrowdSec** | does that look like an attack? (watch only) | LXC 102 |
 
 Glance and Grafana overlap, and both earn their place for a reason worth
 stating: **Glance is checked, Grafana is consulted.** Glance answers "is
@@ -233,12 +235,56 @@ The two configuration details that cause every Glance support question:
 | Raspberry Pi | node_exporter in a container | 9100 |
 | containers on LXC 102 | cAdvisor | 8085 |
 | the cluster | prometheus-pve-exporter | 9221 |
+| CrowdSec | built-in metrics | 6060 |
+| AdGuard Home (Pi) | adguard-exporter | 9618 |
 
 **cAdvisor inside an unprivileged LXC sees less than on bare metal.**
 Per-container CPU and memory work. Some disk I/O statistics do not, because the
 container cannot read the host's block device accounting. That is a known
 limitation of running the monitoring stack inside a container rather than on the
 node, not a misconfiguration.
+
+---
+
+## Security logs: watch, don't block
+
+A small "who knocks on the door" setup, files in
+[`compose/security/`](../compose/security/). It **only watches and reports.
+Nothing in it blocks traffic.**
+
+| Container | Job | Memory cap |
+|---|---|---:|
+| **Loki** | log database, keeps 30 days, Docker network only | 512 MB |
+| **Alloy** | collects the LXC 102 journal (SSH logins + every container's log) and the OPNsense firewall log (syslog on UDP 1514). Adds country/city of the sender from the free DB-IP database | 320 MB |
+| **CrowdSec** | reads those logs back from Loki and spots SSH brute force, web scans, port scans | 256 MB |
+| **adguard-exporter** | turns AdGuard stats into Prometheus numbers, read-only | 64 MB |
+
+Real use is about half the caps. The Grafana dashboard **Homelab Security**
+shows a world map of game connections, pass vs block over time, top source
+IPs and destination ports, failed SSH logins, CrowdSec alerts and AdGuard
+numbers.
+
+Choices worth stating:
+
+- **No bouncer.** CrowdSec writes "4h ban" decisions into its own database,
+  and nothing acts on them. Blocking is a separate, later decision.
+- **No online API.** Nothing is sent to crowdsec.net.
+- **Private IPs are whitelisted** by CrowdSec. LAN SSH attempts show on the
+  dashboard but don't raise alerts. Behind a Cloudflare tunnel, Apache only
+  sees a Docker IP as the visitor, so web scenarios stay quiet until the real
+  IP is passed through (`mod_remoteip`).
+- **OPNsense side:** *System → Settings → Logging → Remote*, UDP, application
+  `filterlog` only, rfc5424, target LXC 102 port 1514. Pass rules only show up
+  if the rule has *Log packets* ticked.
+- **GeoIP file is not in Git.** It's downloaded by hand from DB-IP ("IP to
+  City Lite", CC BY 4.0) into `/opt/security/geoip/` and refreshed monthly.
+
+Run it in the **same compose project** as the monitoring stack so Grafana and
+Prometheus reach it by name, and never with `--remove-orphans`:
+
+```bash
+docker compose -p stacks -f security.yml up -d
+```
 
 ---
 

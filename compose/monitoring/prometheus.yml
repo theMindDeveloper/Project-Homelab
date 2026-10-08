@@ -34,6 +34,23 @@ scrape_configs:
     static_configs:
       - targets: ["localhost:9090"]
 
+  # --- security monitoring (compose/security, same compose project) ------
+  # CrowdSec: alerts and "would block" decisions. Watch only, no bouncer.
+  - job_name: crowdsec
+    static_configs:
+      - targets: ["crowdsec:6060"]
+
+  # AdGuard Home on the Pi, through adguard-exporter.
+  # Per-query histograms are dropped: many series, and no panel uses them.
+  - job_name: adguard
+    scrape_interval: 60s
+    static_configs:
+      - targets: ["adguard-exporter:9618"]
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: "adguard_(processing_time_.*|queries_details_histogram_.*|dhcp_leases)"
+        action: drop
+
   # --- the Proxmox nodes themselves ---------------------------------------
   # node_exporter installed on each node, not in a container:
   #   apt install prometheus-node-exporter
