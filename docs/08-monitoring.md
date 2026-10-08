@@ -315,6 +315,29 @@ Four things the first live look at that dashboard taught:
   bar per row with its name. Prometheus panels return one series per label
   and do not need this.
 
+**Home network & router (FRITZ!Box).** A `fritz_exporter` container reads the
+router over TR-064 with its own FRITZ!Box user (settings rights only, no
+internet access) and gives Prometheus the numbers. The Security dashboard has
+a section for them: **new devices** in the chosen time range (the router's
+"known devices" count went up), **Wi-Fi devices now**, known devices of all
+time, **remote access (MyFRITZ)** on/off, **firmware** current or "UPDATE!",
+internet reconnects, plus devices over time (a jump = a new device) and
+internet traffic down/up (a long unexplained upload is worth a closer look).
+
+Three things learned while wiring it up:
+
+- **fritz_exporter 3.x listens on `127.0.0.1` by default.** Inside a
+  container that means Prometheus gets "connection refused". Set
+  `FRITZ_LISTEN_ADDRESS=0.0.0.0` (it is still only reachable on the Docker
+  network).
+- **`or vector(0)` hides a dead exporter.** `max(link_status) or vector(0)`
+  turns "no data" into 0, so "exporter down" looks exactly like "internet
+  down". Leave it out and let a separate "target down" check (`up == 0`)
+  cover the exporter.
+- **`x < 1` vs `x < bool 1`.** A plain comparison *filters*: when the check
+  fails it returns nothing, not 1, so a rule built on it can never fire.
+  `< bool 1` always returns a number, 1 when broken and 0 when fine.
+
 Choices worth stating:
 
 - **No bouncer.** CrowdSec writes "4h ban" decisions into its own database,
