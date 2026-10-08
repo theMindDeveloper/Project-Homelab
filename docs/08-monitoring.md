@@ -279,7 +279,7 @@ the default `httpd.conf` are in
 Alloy then labels those lines `job="apache"` and adds the location, the same
 way as for the firewall log.
 
-Three things the first live look at that dashboard taught:
+Four things the first live look at that dashboard taught:
 
 - **Pick a basemap that needs no key.** Grafana's default basemap (CARTO)
   now wants an API key and just says "API KEY REQUIRED". OpenStreetMap
@@ -294,6 +294,14 @@ Three things the first live look at that dashboard taught:
   Syncthing broadcasts). The queries drop private source ranges
   (`10/8`, `172.16/12`, `192.168/16`, `127/8`). "Blocked from internet" at
   0 is normal when the router in front only forwards the game ports.
+- **Bar gauges and pies from Loki: show every row.** A Loki "top N" query
+  run as an *instant* query reaches Grafana as one table with a row per
+  country (or protocol, or kind). With the default settings a bar gauge or
+  pie then reduces that table to one number and draws a single bar, e.g.
+  "Top countries" showing just "65" with no names. Setting the panel to show
+  all values (`reduceOptions.values: true`, `fields: "/^Value/"`) draws one
+  bar per row with its name. Prometheus panels return one series per label
+  and do not need this.
 
 Choices worth stating:
 
