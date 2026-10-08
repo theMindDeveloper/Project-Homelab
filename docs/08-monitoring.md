@@ -175,6 +175,14 @@ Dashboards worth importing rather than building, by ID from grafana.com:
 1860 is the one to start with. It is comprehensive to the point of being
 overwhelming, and it is a good way to learn what node_exporter actually exposes.
 
+Imported dashboards answer generic questions. This lab's own
+[Homelab Overview](../compose/monitoring/dashboards/homelab-overview.json) is
+the page Grafana opens on: nodes online, guests running and stopped, guests
+with **no backup** in red, hottest CPU, fullest storage with a "full in N days"
+estimate, and one table of every VM and LXC. It is built only from
+node_exporter and pve-exporter metrics, so it works on any Proxmox cluster
+scraped the same way.
+
 **Provision the data source in a file, not by clicking.** A Grafana whose
 configuration only exists in its own volume is a Grafana you have to reconfigure
 by hand after every rebuild:

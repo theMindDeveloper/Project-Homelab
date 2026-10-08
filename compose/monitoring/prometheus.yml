@@ -50,24 +50,41 @@ scrape_configs:
   # prometheus-pve-exporter runs as a container next to Prometheus, with an
   # API token that has only PVEAuditor (read-only). The token lives in the
   # exporter's env file (chmod 600), never here.
+  #
+  # Cluster data (every node, VM, LXC, storage) is the same whichever node
+  # you ask, so it is fetched from ONE node. Asking all three stored every
+  # series three times and drew triple gauges. Trade-off: if P1 is down,
+  # cluster data pauses; node_exporter health above is not affected.
   - job_name: proxmox-api
     metrics_path: /pve
     params:
       module: [default]
       cluster: ["1"]
-      node: ["1"]
+      node: ["0"]
     static_configs:
-      - targets:
-          - "192.168.178.20"
-          - "192.168.178.77"
-          - "192.168.178.50"
-    relabel_configs:
+      - targets: ["192.168.178.20"]
+    relabel_configs: &pve_relabel
       - source_labels: [__address__]
         target_label: __param_target
       - source_labels: [__param_target]
         target_label: instance
       - target_label: __address__
         replacement: "pve-exporter:9221"   # service name on the compose network
+
+  # Per-node extras (start-on-boot, replication) only exist per node, so
+  # these are asked from each node, with the cluster part switched off.
+  - job_name: proxmox-api-node
+    metrics_path: /pve
+    params:
+      module: [default]
+      cluster: ["0"]
+      node: ["1"]
+    static_configs:
+      - targets:
+          - "192.168.178.20"
+          - "192.168.178.77"
+          - "192.168.178.50"
+    relabel_configs: *pve_relabel
 
   # ---------------------------------------------------------------------
   #  NOT YET DEPLOYED. The exporters below are not installed, so these

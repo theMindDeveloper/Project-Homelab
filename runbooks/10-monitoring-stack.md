@@ -92,7 +92,9 @@ http://192.168.178.87:9090/targets
 
 *The screenshot is from before P2, P3 and pve-exporter were added. Current state
 of this lab: three scrape pools, all UP — Prometheus itself, `node_exporter` on
-all three nodes, and pve-exporter asking the Proxmox API once per node. The Pi
+all three nodes, and pve-exporter. pve-exporter has two jobs: cluster data
+asked from one node only (asking every node stores each series three times),
+and the small per-node extras asked from each node. The Pi
 and cAdvisor are still not scraped. A page of red targets you have learned to
 ignore is worse than a short page of green ones.*
 
@@ -167,7 +169,11 @@ providers:
 
 Download each dashboard's JSON from grafana.com, replace its `${DS_PROMETHEUS}`
 input with the data source's `uid`, and drop it in `dashboards/`. This lab
-provisions 1860 and 10347. For a one-off, **Dashboards → New → Import** by ID
+provisions 1860 and 10347, plus its own one-page
+[Homelab Overview](../compose/monitoring/dashboards/homelab-overview.json)
+(nodes, storage with a "full in N days" estimate, every guest, guests with no
+backup), set as Grafana's home page with
+`GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH`. For a one-off, **Dashboards → New → Import** by ID
 works too:
 
 | ID | Dashboard | Needs |
