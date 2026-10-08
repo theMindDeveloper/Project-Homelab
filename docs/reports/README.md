@@ -32,6 +32,7 @@ modesty; they are the parts that are load-bearing when something breaks.
 |---|---|---|
 | 2026-08-13 | [DMZ migration](2026-08-13-dmz-migration.md) | isolating internet-facing game servers from the house LAN using a software DMZ on Proxmox |
 | 2026-09-11 | [Privacy update](2026-09-11-privacy-update.md) | encrypted upstream DNS (Quad9 over DoH/DoT) and qBittorrent on the NAS only through Mullvad via gluetun |
+| 2026-10-08 | [AI agent with least privilege](2026-10-08-ai-agent-least-privilege.md) | giving an AI agent its own narrow access (per-machine user, limited Proxmox API role), and putting every change through Git PRs where a merge is the approval to apply |
 
 ---
 
