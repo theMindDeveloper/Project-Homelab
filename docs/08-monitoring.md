@@ -256,6 +256,21 @@ shows a world map of game connections, pass vs block over time, top source
 IPs and destination ports, failed SSH logins, CrowdSec alerts and AdGuard
 numbers.
 
+Three things the first live look at that dashboard taught:
+
+- **Use OpenStreetMap tiles for the map.** Grafana's default basemap (CARTO)
+  now wants an API key and just says "API KEY REQUIRED". The `osm-standard`
+  basemap is free and needs no key.
+- **Count game traffic on the DMZ side, not on WAN.** OPNsense logs an
+  internet game connection where it leaves towards the DMZ (DMZ interface,
+  direction *out*). Read it there and every connection is counted once.
+  Also logging the WAN rules would count each connection twice, so don't.
+- **Firewall panels only count traffic from the internet.** Without a filter
+  on the source IP, "blocked" fills up with house-LAN noise (NetBIOS, mDNS,
+  Syncthing broadcasts). The queries drop private source ranges
+  (`10/8`, `172.16/12`, `192.168/16`, `127/8`). "Blocked from internet" at
+  0 is normal when the router in front only forwards the game ports.
+
 Choices worth stating:
 
 - **No bouncer.** CrowdSec writes "4h ban" decisions into its own database,
