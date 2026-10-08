@@ -1,0 +1,21 @@
+# node_exporter in Docker - used on the Raspberry Pi (and, set up in the UGOS UI, on the NAS).
+# Lets Prometheus (LXC 102) read CPU, RAM, disk, network and temperature of the box.
+# Read-only: it only looks at /proc, /sys and the root filesystem (mounted ro).
+# Port 9100, LAN only.
+services:
+  node-exporter:
+    image: prom/node-exporter:v1.12.1
+    container_name: node-exporter
+    restart: unless-stopped
+    network_mode: host
+    pid: host
+    command:
+      - --path.rootfs=/host
+    volumes:
+      - /:/host:ro,rslave
+    mem_limit: 64m
+
+# NAS variant (UGOS rejects host-root mounts): bridge network with "9100:9100",
+# no rootfs mount, and one empty read-only folder per HDD volume, e.g.
+#   - /volume1/docker/node-exporter:/disks/volume1:ro
+# so Prometheus can still see how full each volume is.

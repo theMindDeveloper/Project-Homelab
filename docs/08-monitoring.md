@@ -58,8 +58,10 @@ scrape pools, both UP, last scrape about a minute ago, 5 ms and 103 ms. The
 produces, which is what makes `up == 0` per-instance possible at all.*
 
 *The screenshot shows the coverage before P2, P3 and pve-exporter were added.
-Today all three nodes and the Proxmox API are scraped. The Pi and cAdvisor are
-still only a plan in `prometheus.yml`, because a target that is configured and
+Today all three nodes, the Proxmox API, the Raspberry Pi and the NAS are
+scraped. The Pi and the NAS run node_exporter as a small read-only container
+(see [`compose/node-exporter`](../compose/node-exporter/docker-compose.example.yml)).
+cAdvisor is still only a plan in `prometheus.yml`, because a target that is configured and
 not installed shows DOWN forever and teaches you to ignore DOWN.*
 
 Short-lived jobs that finish before a scrape are the case pull handles badly.
