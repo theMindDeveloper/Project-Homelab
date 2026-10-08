@@ -150,6 +150,36 @@ None of these were changed. They're waiting for a decision.
 - **An agent that only reports is still useful.** The biggest finding of the
   day, no backups, needed nobody to change anything to be found.
 
+## 7 · Later the same day: the game managers
+
+The agent can now manage the game servers through their own APIs, instead of poking at files.
+
+**AMP.** I created a user `openclaw` in the AMP web UI (Configuration → User
+Management) and gave it its own role. I kept the role broad on purpose
+(settings, instance manager, file manager, instances). The agent logs in
+through AMP's HTTP API.
+
+**Pterodactyl.** The agent set this up itself, from inside the panel
+container. It took a database backup first:
+
+```bash
+cd /opt/pterodactyl-panel
+sudo -u www-data php artisan p:user:make --email=openclaw@theminddev.com \
+  --username=openclaw --name-first=Open --name-last=Claw --admin=0
+```
+
+Then, in `php artisan tinker`, it added that user as a **subuser** on each
+server with only `websocket.connect`, `control.*` (console, start, stop,
+restart), `file.*` and `backup.*`, and created an account API key limited to
+`192.168.178.91`.
+
+The check that matters: with that key, the client API lists both servers,
+and the admin API (`/api/application/...`) answers **403**. The agent can
+run the games but cannot administer the panel.
+
+**Undo:** delete the `openclaw` user in Pterodactyl (Admin → Users) and in AMP
+(User Management).
+
 ---
 
 **See also:** [`docs/99` · security notes](../99-security-notes.md) ·
