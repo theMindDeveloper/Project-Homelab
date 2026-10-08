@@ -54,8 +54,8 @@ pages:
                     icon: "si:vaultwarden"
                     timeout: 5s
                   - title: Jellyfin
-                    url: https://jelly.theminddev.com/web/#/home
-                    check-url: http://192.168.178.79:8096/health
+                    url: https://jelly0.theminddev.com/web/#/home.html
+                    check-url: http://192.168.178.79:8899/health
                     icon: "si:jellyfin"
                     timeout: 5s
                   - title: "NPM"
@@ -106,7 +106,7 @@ pages:
                     # Reachable from here because of the floating firewall
                     # rule that passes 192.168.178.0/24 -> 10.10.10.0/24 for
                     # admin access - see docs/16-firewalls-and-pf.md.
-                    url: http://10.10.10.21:8080
+                    url: https://amp.theminddev.com/
                     check-url: http://10.10.10.21:8080
                     icon: "mdi:server"
                   - title: "CasaOS"
@@ -126,6 +126,15 @@ pages:
                     icon: "si:tp-link"
                     # self-signed certificate, same as Proxmox and Portainer.
                     allow-insecure: true
+                  - title: "ProxCenter"
+                    url: https://center.theminddev.com/
+                    check-url: http://192.168.178.87:3080/api/health
+                    icon: "si:proxmox"
+                  - title: "n8n"
+                    # no proxy host yet, so the tile links to the direct address.
+                    url: http://192.168.178.87:5678
+                    check-url: http://192.168.178.87:5678/healthz
+                    icon: "si:n8n"
 
           # The three cluster nodes. A red tile here means the node is down or
           # has lost quorum; `pvecm status` on any surviving node says which.
@@ -150,13 +159,11 @@ pages:
                 allow-insecure: true
               - title: "OPNsense"
                 # VM 200, the DMZ firewall. WAN leg address - see inventory.yml.
-                # Verify the GUI port against your build before relying on this
-                # tile; OPNsense defaults to 443, this repo's firewall notes
-                # mention 80.
+                # The GUI listens on HTTP port 80 only (the WAN rule allows
+                # 80 from the LAN); HTTPS on 443 times out.
                 url: https://192.168.178.60
-                check-url: https://192.168.178.60
+                check-url: http://192.168.178.60/
                 icon: "si:opnsense"
-                allow-insecure: true
 
           # NAS services. Immich and Syncthing default ports are used below -
           # confirm against your actual container port mappings and adjust.
@@ -176,6 +183,17 @@ pages:
                 url: http://192.168.178.79:45333
                 check-url: http://192.168.178.79:45333
                 icon: "mdi:youtube"
+              - title: "qBittorrent"
+                # runs inside gluetun's network; this port is published on
+                # gluetun, so red here means the VPN tunnel is down too.
+                url: https://torrent.theminddev.com/
+                check-url: http://192.168.178.79:8085
+                icon: "si:qbittorrent"
+              - title: "UGOS (NAS)"
+                url: https://nas.theminddev.com/
+                check-url: http://192.168.178.79:9999
+                icon: "mdi:nas"
+                alt-status-codes: [301, 302, 303, 307, 308]
 
           # VM 103 "agents" - Hermes and Openclaw dashboards.
           - type: monitor
@@ -237,8 +255,8 @@ pages:
                     description: adguard.theminddev.com
                     url: https://adguard.theminddev.com
                   - title: AMP
-                    description: 10.10.10.21:8080 (DMZ)
-                    url: http://10.10.10.21:8080
+                    description: amp.theminddev.com (DMZ)
+                    url: https://amp.theminddev.com/
                   - title: CasaOS
                     description: casa.theminddev.com
                     url: https://casa.theminddev.com
@@ -248,6 +266,12 @@ pages:
                   - title: Omada Controller
                     description: 192.168.178.88:8043
                     url: https://192.168.178.88:8043
+                  - title: ProxCenter
+                    description: center.theminddev.com
+                    url: https://center.theminddev.com/
+                  - title: n8n
+                    description: 192.168.178.87:5678
+                    url: http://192.168.178.87:5678
               - title: NAS
                 links:
                   - title: Immich
@@ -259,6 +283,15 @@ pages:
                   - title: MeTube
                     description: 192.168.178.79:45333
                     url: http://192.168.178.79:45333
+                  - title: Jellyfin
+                    description: jelly0.theminddev.com
+                    url: https://jelly0.theminddev.com/web/#/home.html
+                  - title: qBittorrent
+                    description: torrent.theminddev.com (via gluetun)
+                    url: https://torrent.theminddev.com/
+                  - title: UGOS (NAS)
+                    description: nas.theminddev.com
+                    url: https://nas.theminddev.com/
                   - title: FTP (pure-ftpd)
                     description: ftp://192.168.178.87 - no HTTP health check
                     url: "#"
@@ -283,8 +316,8 @@ pages:
                     description: p3.theminddev.com
                     url: https://p3.theminddev.com
                   - title: OPNsense
-                    description: 192.168.178.60
-                    url: https://192.168.178.60
+                    description: opn.theminddev.com
+                    url: https://opn.theminddev.com/
                   - title: DietPi
                     description: 192.168.178.178
                     url: "#"
