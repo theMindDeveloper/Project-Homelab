@@ -5,7 +5,7 @@
 # ---------------------------------------------------------------------------
 services:
   glance:
-    image: glanceapp/glance:latest
+    image: glanceapp/glance:v0.8.5
     container_name: glance
     restart: unless-stopped
     ports:
@@ -15,5 +15,8 @@ services:
       - ./assets:/app/assets:ro
     environment:
       - TZ=Europe/Berlin
+    # Read-only WUD API tokens for the Versions box (see compose/wud)
+    env_file:
+      - .env
     security_opt:
       - no-new-privileges:true

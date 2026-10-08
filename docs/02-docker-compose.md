@@ -341,6 +341,60 @@ check which one is installed.
 
 ---
 
+## Keeping images up to date
+
+Updating a container never means patching it in place. You **replace** it:
+
+```bash
+docker compose pull      # downloads only the image layers that changed
+docker compose up -d     # sees the new image, recreates the container
+docker image prune       # later: delete the old, now unused image
+```
+
+Data survives because it lives in volumes and bind mounts, not in the
+container. The old image stays on disk until you prune it, which is also your
+quickest rollback: put the old tag back and `up -d` again.
+
+**Pin versions.** `image: grafana/grafana:13.1.3`, not `:latest`. With `latest`
+you can't tell what's running, `pull` may silently jump a major version, and
+no tool can tell you that something is "outdated", because `latest` is always
+"the newest".
+
+This lab splits the job between two tools, and neither one changes anything by
+itself:
+
+- **Renovate** (free bot, hosted by Mend) reads the compose files in the
+  private ops repo. When a newer **major or minor** version exists, it opens a
+  PR that changes the one `image:` line, with the release notes pasted in. It
+  runs on weekends, keeps a "Dependency Dashboard" issue, and never merges by
+  itself. Patch updates and Postgres are excluded; a database major upgrade
+  needs a dump and restore, not an image swap.
+  Merging the PR is the approval. The deploy is the three commands above,
+  with a backup of the file first.
+- **WUD** (What's Up Docker, [compose/wud](../compose/wud/docker-compose.example.yml))
+  runs on every Docker host and answers "what's running, and is it outdated?".
+  It feeds the **Versions** box on Glance: red for a major update, yellow for
+  minor or patch, green for up to date, grey when the tag has no version
+  (`:hardened`, `:latest`).
+
+### Read-only, really
+
+WUD needs the Docker API, and access to the Docker socket is root access to the
+host. Mounting the socket `:ro` does **not** help: that only stops writes to the
+socket *file*, not API calls through it. So WUD never sees the socket
+directly:
+
+- A **socket proxy** sits in between and allows only reads (`POST=0`). Listing
+  containers returns 200, stopping one returns 403.
+- The proxy lives on an `internal: true` network: no published port, not
+  reachable from the LAN.
+- Exposing even a read-only Docker API on the network would still leak every
+  container's environment variables, which is where passwords usually live.
+  The proxy stays internal. Remote readers get WUD's own API, which never
+  returns them.
+- Glance reads WUD with an API token of a **read-only** WUD user. Tokens and
+  admin passwords live in `.env` files on the hosts, never in Git.
+
 ## The conventions used in this lab
 
 Every file in [`compose/`](../compose/) follows the same rules, and the reasoning
