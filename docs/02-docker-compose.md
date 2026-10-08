@@ -373,7 +373,8 @@ itself:
   with a backup of the file first.
 - **WUD** (What's Up Docker, [compose/wud](../compose/wud/docker-compose.example.yml))
   runs on every Docker host and answers "what's running, and is it outdated?".
-  It feeds the **Versions** box on Glance: red for a major update, yellow for
+  It feeds the **Versions** box on Glance: a colour bar plus one card per host.
+  Red for a major update, yellow for
   minor or patch, green for up to date, grey when the tag has no version
   (`:hardened`, `:latest`).
 

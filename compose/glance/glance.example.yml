@@ -215,71 +215,72 @@ pages:
             title-url: http://192.168.178.87:3003
             cache: 30m
             # Data comes from WUD (What's Up Docker) on each host. Requests are made
-            # inside the template so one host being down doesn't break the whole widget.
+            # inside the template so one host being down doesn't break the whole box.
             # Tokens are read-only WUD API tokens from /opt/glance/.env (not in Git).
+            # Colours: red = major update, yellow = minor/patch, green = up to date,
+            # grey = can't be checked (tag like "latest" or "hardened", not a version).
             template: |
-              {{/* One container row. Colour: red = major update, yellow = minor/patch, green = up to date. */}}
-              {{ define "row" }}
-              {{ $diff := .String "updateKind.semverDiff" }}
-              <li>
-                <div class="flex justify-between items-center gap-10">
-                  <div class="min-width-0">
-                    <div class="text-truncate color-highlight">{{ .String "name" }}{{ if ne (.String "status") "running" }} <span class="color-negative size-h6">● {{ .String "status" }}</span>{{ end }}</div>
-                    <div class="size-h6 color-subdue">{{ .String "watcher" }}{{ if .Exists "image.created" }} · image <span {{ .String "image.created" | parseTime "RFC3339" | toRelativeTime }}></span> old{{ end }}</div>
-                  </div>
-                  <div class="text-right shrink-0">
-                    {{ if and (.Bool "updateAvailable") (eq $diff "major") }}
-                      <span class="color-negative">● {{ .String "image.tag.value" }} → {{ if .Exists "result.link" }}<a class="color-negative" href="{{ .String "result.link" }}" target="_blank" rel="noreferrer">{{ .String "result.tag" }}</a>{{ else }}{{ .String "result.tag" }}{{ end }}</span>
-                      <div class="size-h6 color-subdue">major</div>
-                    {{ else if .Bool "updateAvailable" }}
-                      <span style="color: hsl(43, 90%, 55%)">● {{ .String "image.tag.value" }} → {{ if .Exists "result.link" }}<a style="color: inherit" href="{{ .String "result.link" }}" target="_blank" rel="noreferrer">{{ .String "result.tag" }}</a>{{ else }}{{ .String "result.tag" }}{{ end }}</span>
-                      <div class="size-h6 color-subdue">{{ if $diff }}{{ $diff }}{{ else }}new build{{ end }}</div>
-                    {{ else if .Exists "error" }}
-                      <span class="color-subdue">● {{ .String "image.tag.value" }}</span>
-                      <div class="size-h6 color-subdue">can't check</div>
-                    {{ else }}
-                      <span class="color-positive">● {{ .String "image.tag.value" }}</span>
-                    {{ end }}
-                  </div>
+
+              {{/* One host card. Context: the parsed JSON array of WUD containers. */}}
+              {{ define "card" }}
+                {{ range .Array "" }}{{ if and (.Bool "image.tag.semver") (.Bool "updateAvailable") (eq (.String "updateKind.semverDiff") "major") }}
+                <div class="flex justify-between items-center gap-10" style="padding:3px 0">
+                  <span class="text-truncate color-highlight">{{ .String "name" }}{{ if ne (.String "status") "running" }} <span class="color-negative size-h6">stopped</span>{{ end }}</span>
+                  <span class="shrink-0" style="font-variant-numeric:tabular-nums"><span class="color-subdue">{{ .String "image.tag.value" }} →</span> {{ if .Exists "result.link" }}<a href="{{ .String "result.link" }}" target="_blank" rel="noreferrer" style="color:hsl(0,80%,68%)">{{ .String "result.tag" }}</a>{{ else }}<span style="color:hsl(0,80%,68%)">{{ .String "result.tag" }}</span>{{ end }} <span style="font-size:.7em;padding:1px 6px;border-radius:4px;background:hsl(0,80%,68%);color:#111;font-weight:700;text-transform:uppercase;vertical-align:middle">major</span></span>
                 </div>
-              </li>
+                {{ end }}{{ end }}
+                {{ range .Array "" }}{{ if and (.Bool "image.tag.semver") (.Bool "updateAvailable") (ne (.String "updateKind.semverDiff") "major") }}
+                <div class="flex justify-between items-center gap-10" style="padding:3px 0">
+                  <span class="text-truncate color-highlight">{{ .String "name" }}{{ if ne (.String "status") "running" }} <span class="color-negative size-h6">stopped</span>{{ end }}</span>
+                  <span class="shrink-0" style="font-variant-numeric:tabular-nums"><span class="color-subdue">{{ .String "image.tag.value" }} →</span> {{ if .Exists "result.link" }}<a href="{{ .String "result.link" }}" target="_blank" rel="noreferrer" style="color:hsl(43,90%,58%)">{{ .String "result.tag" }}</a>{{ else }}<span style="color:hsl(43,90%,58%)">{{ .String "result.tag" }}</span>{{ end }} <span style="font-size:.7em;padding:1px 6px;border-radius:4px;background:hsl(43,90%,58%);color:#111;font-weight:700;text-transform:uppercase;vertical-align:middle">{{ .String "updateKind.semverDiff" }}</span></span>
+                </div>
+                {{ end }}{{ end }}
+                <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px">
+                {{ range .Array "" }}{{ if and (.Bool "image.tag.semver") (not (.Bool "updateAvailable")) }}<span title="{{ .String "image.tag.value" }}" style="font-size:.8em;padding:1px 7px;border-radius:10px;border:1px solid hsl(140,55%,50%);color:hsl(140,55%,60%)">✓ {{ .String "name" }}</span>{{ end }}{{ end }}
+                {{ range .Array "" }}{{ if not (.Bool "image.tag.semver") }}<span title="tag '{{ .String "image.tag.value" }}' is not a version, so it can't be checked. Pin a version to track it." style="font-size:.8em;padding:1px 7px;border-radius:10px;border:1px dashed var(--color-text-subdue);" class="color-subdue">? {{ .String "name" }} <i>{{ .String "image.tag.value" }}</i></span>{{ end }}{{ end }}
+                </div>
               {{ end }}
 
               {{ $lx := newRequest "http://192.168.178.87:3003/api/containers" | withHeader "Authorization" "Bearer ${WUD_TOKEN_LXC102}" | getResponse }}
               {{ $pi := newRequest "http://192.168.178.178:3003/api/containers" | withHeader "Authorization" "Bearer ${WUD_TOKEN_PI}" | getResponse }}
               {{ $nas := newRequest "http://192.168.178.79:3003/api/containers" | withHeader "Authorization" "Bearer ${WUD_TOKEN_NAS}" | getResponse }}
-              {{ $okL := eq $lx.Response.StatusCode 200 }}
-              {{ $okP := eq $pi.Response.StatusCode 200 }}
-              {{ $okN := eq $nas.Response.StatusCode 200 }}
 
-              {{/* Counts for the summary line */}}
-              {{ $maj := 0 }}{{ $min := 0 }}{{ $up := 0 }}{{ $down := 0 }}
-              {{ if $okL }}{{ range $lx.JSON.Array "" }}{{ if and (.Bool "updateAvailable") (eq (.String "updateKind.semverDiff") "major") }}{{ $maj = add $maj 1 }}{{ else if .Bool "updateAvailable" }}{{ $min = add $min 1 }}{{ else }}{{ $up = add $up 1 }}{{ end }}{{ if ne (.String "status") "running" }}{{ $down = add $down 1 }}{{ end }}{{ end }}{{ end }}
-              {{ if $okP }}{{ range $pi.JSON.Array "" }}{{ if and (.Bool "updateAvailable") (eq (.String "updateKind.semverDiff") "major") }}{{ $maj = add $maj 1 }}{{ else if .Bool "updateAvailable" }}{{ $min = add $min 1 }}{{ else }}{{ $up = add $up 1 }}{{ end }}{{ if ne (.String "status") "running" }}{{ $down = add $down 1 }}{{ end }}{{ end }}{{ end }}
-              {{ if $okN }}{{ range $nas.JSON.Array "" }}{{ if and (.Bool "updateAvailable") (eq (.String "updateKind.semverDiff") "major") }}{{ $maj = add $maj 1 }}{{ else if .Bool "updateAvailable" }}{{ $min = add $min 1 }}{{ else }}{{ $up = add $up 1 }}{{ end }}{{ if ne (.String "status") "running" }}{{ $down = add $down 1 }}{{ end }}{{ end }}{{ end }}
+              {{/* Totals across all reachable hosts */}}
+              {{ $maj := 0 }}{{ $min := 0 }}{{ $ok := 0 }}{{ $unk := 0 }}
+              {{ $okL := eq $lx.Response.StatusCode 200 }}{{ $okP := eq $pi.Response.StatusCode 200 }}{{ $okN := eq $nas.Response.StatusCode 200 }}
+              {{ if $okL }}{{ range $lx.JSON.Array "" }}{{ if not (.Bool "image.tag.semver") }}{{ $unk = add $unk 1 }}{{ else if and (.Bool "updateAvailable") (eq (.String "updateKind.semverDiff") "major") }}{{ $maj = add $maj 1 }}{{ else if .Bool "updateAvailable" }}{{ $min = add $min 1 }}{{ else }}{{ $ok = add $ok 1 }}{{ end }}{{ end }}{{ end }}
+              {{ if $okP }}{{ range $pi.JSON.Array "" }}{{ if not (.Bool "image.tag.semver") }}{{ $unk = add $unk 1 }}{{ else if and (.Bool "updateAvailable") (eq (.String "updateKind.semverDiff") "major") }}{{ $maj = add $maj 1 }}{{ else if .Bool "updateAvailable" }}{{ $min = add $min 1 }}{{ else }}{{ $ok = add $ok 1 }}{{ end }}{{ end }}{{ end }}
+              {{ if $okN }}{{ range $nas.JSON.Array "" }}{{ if not (.Bool "image.tag.semver") }}{{ $unk = add $unk 1 }}{{ else if and (.Bool "updateAvailable") (eq (.String "updateKind.semverDiff") "major") }}{{ $maj = add $maj 1 }}{{ else if .Bool "updateAvailable" }}{{ $min = add $min 1 }}{{ else }}{{ $ok = add $ok 1 }}{{ end }}{{ end }}{{ end }}
 
-              <div class="flex justify-between text-center margin-bottom-10">
-                <div><div class="color-negative size-h3">{{ $maj }}</div><div class="size-h6">major</div></div>
-                <div><div class="size-h3" style="color: hsl(43, 90%, 55%)">{{ $min }}</div><div class="size-h6">minor/patch</div></div>
-                <div><div class="color-positive size-h3">{{ $up }}</div><div class="size-h6">up to date</div></div>
-                <div><div class="{{ if gt $down 0 }}color-negative{{ else }}color-subdue{{ end }} size-h3">{{ $down }}</div><div class="size-h6">not running</div></div>
+              {{/* Summary: one stacked bar + numbers */}}
+              <div style="display:flex;height:10px;border-radius:5px;overflow:hidden;gap:2px;margin-bottom:6px">
+                {{ if gt $maj 0 }}<div style="flex:{{ $maj }};background:hsl(0,80%,68%)"></div>{{ end }}
+                {{ if gt $min 0 }}<div style="flex:{{ $min }};background:hsl(43,90%,58%)"></div>{{ end }}
+                {{ if gt $ok 0 }}<div style="flex:{{ $ok }};background:hsl(140,55%,50%)"></div>{{ end }}
+                {{ if gt $unk 0 }}<div style="flex:{{ $unk }};background:var(--color-text-subdue);opacity:.5"></div>{{ end }}
               </div>
-              {{ if not $okL }}<p class="color-negative size-h6 margin-bottom-10">LXC 102: WUD unreachable</p>{{ end }}
-              {{ if not $okP }}<p class="color-negative size-h6 margin-bottom-10">Pi: WUD unreachable</p>{{ end }}
-              {{ if not $okN }}<p class="color-negative size-h6 margin-bottom-10">NAS: WUD unreachable</p>{{ end }}
+              <div class="flex gap-15 size-h6" style="margin-bottom:14px;flex-wrap:wrap">
+                <span><b style="color:hsl(0,80%,68%)">{{ $maj }}</b> major</span>
+                <span><b style="color:hsl(43,90%,58%)">{{ $min }}</b> minor/patch</span>
+                <span><b style="color:hsl(140,55%,55%)">{{ $ok }}</b> up to date</span>
+                <span class="color-subdue"><b>{{ $unk }}</b> can't check</span>
+              </div>
 
-              {{/* Worst first: majors, then minor/patch, then the rest */}}
-              <ul class="list list-gap-10 collapsible-container" data-collapse-after="6">
-              {{ if $okL }}{{ range $lx.JSON.Array "" }}{{ if and (.Bool "updateAvailable") (eq (.String "updateKind.semverDiff") "major") }}{{ template "row" . }}{{ end }}{{ end }}{{ end }}
-              {{ if $okP }}{{ range $pi.JSON.Array "" }}{{ if and (.Bool "updateAvailable") (eq (.String "updateKind.semverDiff") "major") }}{{ template "row" . }}{{ end }}{{ end }}{{ end }}
-              {{ if $okN }}{{ range $nas.JSON.Array "" }}{{ if and (.Bool "updateAvailable") (eq (.String "updateKind.semverDiff") "major") }}{{ template "row" . }}{{ end }}{{ end }}{{ end }}
-              {{ if $okL }}{{ range $lx.JSON.Array "" }}{{ if and (.Bool "updateAvailable") (ne (.String "updateKind.semverDiff") "major") }}{{ template "row" . }}{{ end }}{{ end }}{{ end }}
-              {{ if $okP }}{{ range $pi.JSON.Array "" }}{{ if and (.Bool "updateAvailable") (ne (.String "updateKind.semverDiff") "major") }}{{ template "row" . }}{{ end }}{{ end }}{{ end }}
-              {{ if $okN }}{{ range $nas.JSON.Array "" }}{{ if and (.Bool "updateAvailable") (ne (.String "updateKind.semverDiff") "major") }}{{ template "row" . }}{{ end }}{{ end }}{{ end }}
-              {{ if $okL }}{{ range $lx.JSON.Array "" }}{{ if not (.Bool "updateAvailable") }}{{ template "row" . }}{{ end }}{{ end }}{{ end }}
-              {{ if $okP }}{{ range $pi.JSON.Array "" }}{{ if not (.Bool "updateAvailable") }}{{ template "row" . }}{{ end }}{{ end }}{{ end }}
-              {{ if $okN }}{{ range $nas.JSON.Array "" }}{{ if not (.Bool "updateAvailable") }}{{ template "row" . }}{{ end }}{{ end }}{{ end }}
-              </ul>
+              {{/* One card per host */}}
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px">
+                <div style="border:1px solid var(--color-separator);border-radius:6px;padding:10px 12px">
+                  <div class="size-h5 uppercase color-subdue" style="margin-bottom:6px">LXC 102 · docker</div>
+                  {{ if $okL }}{{ template "card" $lx.JSON }}{{ else }}<div class="color-negative">WUD unreachable</div>{{ end }}
+                </div>
+                <div style="border:1px solid var(--color-separator);border-radius:6px;padding:10px 12px">
+                  <div class="size-h5 uppercase color-subdue" style="margin-bottom:6px">Raspberry Pi</div>
+                  {{ if $okP }}{{ template "card" $pi.JSON }}{{ else }}<div class="color-negative">WUD unreachable</div>{{ end }}
+                </div>
+                <div style="border:1px solid var(--color-separator);border-radius:6px;padding:10px 12px">
+                  <div class="size-h5 uppercase color-subdue" style="margin-bottom:6px">NAS · UGOS</div>
+                  {{ if $okN }}{{ template "card" $nas.JSON }}{{ else }}<div class="color-subdue">not set up yet / unreachable</div>{{ end }}
+                </div>
+              </div>
 
           - type: bookmarks
             title: DietPi
