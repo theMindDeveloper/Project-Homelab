@@ -1,0 +1,130 @@
+// Grafana Alloy = the log collector. It reads two things and sends them to Loki:
+//   1. the systemd journal of LXC 102 (sshd + every Docker container, because
+//      Docker's log driver here is "journald")
+//   2. the OPNsense firewall log (filterlog), sent by OPNsense as syslog to UDP 1514
+// Labels stay few and boring (unit, container, host, action, proto ...).
+// Per-connection details (IPs, ports, country, city) go into structured metadata.
+
+// ---------------------------------------------------------------- output
+loki.write "local" {
+	endpoint {
+		url = "http://loki:3100/loki/api/v1/push"
+	}
+}
+
+// ---------------------------------------------------------------- 1. journal
+loki.relabel "journal" {
+	forward_to = []
+
+	rule {
+		source_labels = ["__journal__systemd_unit"]
+		target_label  = "unit"
+	}
+	// Every SSH login gets its own "session-c123.scope" unit. Fold them into one value.
+	rule {
+		source_labels = ["unit"]
+		regex         = "session-.+\\.scope"
+		target_label  = "unit"
+		replacement   = "session.scope"
+	}
+
+	rule {
+		source_labels = ["__journal_container_name"]
+		target_label  = "container"
+	}
+
+	rule {
+		source_labels = ["__journal_priority_keyword"]
+		target_label  = "level"
+	}
+}
+
+loki.source.journal "lxc102" {
+	path          = "/var/log/journal"
+	max_age       = "12h"
+	relabel_rules = loki.relabel.journal.rules
+	labels        = {host = "lxc102", source = "journal"}
+	forward_to    = [loki.write.local.receiver]
+}
+
+// ---------------------------------------------------------------- 2. OPNsense filterlog
+loki.source.syslog "opnsense" {
+	listener {
+		address       = "0.0.0.0:1514"
+		protocol      = "udp"
+		syslog_format = "rfc5424"
+		labels        = {host = "opnsense", job = "opnsense", source = "syslog"}
+	}
+	relabel_rules = loki.relabel.syslog.rules
+	forward_to    = [loki.process.filterlog.receiver]
+}
+
+loki.relabel "syslog" {
+	forward_to = []
+
+	rule {
+		source_labels = ["__syslog_message_app_name"]
+		target_label  = "app"
+	}
+}
+
+loki.process "filterlog" {
+	forward_to = [loki.write.local.receiver]
+
+	// Keep only the firewall log. Anything else OPNsense sends is dropped here.
+	stage.match {
+		selector            = "{app!=\"filterlog\"}"
+		action              = "drop"
+		drop_counter_reason = "not_filterlog"
+	}
+
+	stage.label_drop {
+		values = ["app"]
+	}
+
+	// filterlog is CSV. Field order: https://docs.opnsense.org/manual/logging_firewall.html
+	//   rule,subrule,anchor,label,interface,reason,action,dir,ipver, ...
+	// IPv4: ...,4,tos,ecn,ttl,id,offset,flags,protonum,protoname,length,src,dst[,srcport,dstport,...]
+	stage.regex {
+		expression = "^\\x{feff}?(?P<rule>[^,]*),[^,]*,[^,]*,(?P<tracker>[^,]*),(?P<iface>[^,]*),[^,]*,(?P<action>[^,]*),(?P<dir>[^,]*),4,[^,]*,[^,]*,[^,]*,[^,]*,[^,]*,[^,]*,[^,]*,(?P<proto>[^,]*),[^,]*,(?P<src_ip>[^,]*),(?P<dst_ip>[^,]*)(?:,(?P<src_port>\\d+),(?P<dst_port>\\d+))?"
+	}
+	// IPv6: ...,6,class,flowlabel,hoplimit,protoname,protonum,length,src,dst[,srcport,dstport,...]
+	stage.regex {
+		expression = "^\\x{feff}?(?P<rule>[^,]*),[^,]*,[^,]*,(?P<tracker>[^,]*),(?P<iface>[^,]*),[^,]*,(?P<action>[^,]*),(?P<dir>[^,]*),6,[^,]*,[^,]*,[^,]*,(?P<proto>[^,]*),[^,]*,[^,]*,(?P<src_ip>[^,]*),(?P<dst_ip>[^,]*)(?:,(?P<src_port>\\d+),(?P<dst_port>\\d+))?"
+	}
+
+	// Where does the sender come from? Free DB-IP "IP to City Lite" database
+	// (CC BY 4.0, refreshed monthly, file is NOT in Git). Private IPs simply get no result.
+	stage.geoip {
+		source  = "src_ip"
+		db      = "/geoip/dbip-city-lite.mmdb"
+		db_type = "city"
+	}
+
+	// Low-cardinality labels only (a handful of values each).
+	stage.labels {
+		values = {
+			action = "",
+			proto  = "",
+			dir    = "",
+			iface  = "",
+		}
+	}
+
+	// Everything per-connection is structured metadata: searchable, but no new streams.
+	stage.structured_metadata {
+		values = {
+			src_ip      = "",
+			dst_ip      = "",
+			src_port    = "",
+			dst_port    = "",
+			rule        = "",
+			tracker     = "",
+			country     = "geoip_country_name",
+			country_iso = "geoip_country_code",
+			city        = "geoip_city_name",
+			lat         = "geoip_location_latitude",
+			lon         = "geoip_location_longitude",
+		}
+	}
+}

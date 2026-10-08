@@ -1,0 +1,76 @@
+# Security monitoring. It only WATCHES and REPORTS. Nothing here blocks traffic
+# (CrowdSec has no bouncer, so its "decisions" are only shown, never enforced).
+# Run with the same project as monitoring.yml so Grafana + Prometheus reach these by name:
+#   docker compose -p stacks -f security.yml up -d      (never --remove-orphans)
+services:
+  # Log database, 30 days. Only on the Docker network (no host port).
+  loki:
+    image: grafana/loki:3.7.8
+    restart: unless-stopped
+    command: -config.file=/etc/loki/loki.yml
+    expose:
+      - "3100"
+    volumes:
+      - /opt/security/loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki-data:/loki
+    mem_limit: 512m
+
+  # Log collector: LXC 102 journal (sshd + all containers) and OPNsense firewall log.
+  alloy:
+    image: grafana/alloy:v1.20.1
+    restart: unless-stopped
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --storage.path=/var/lib/alloy/data
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --disable-reporting
+    ports:
+      - "1514:1514/udp"   # OPNsense sends syslog (filterlog) here
+    volumes:
+      - /opt/security/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /opt/security/geoip:/geoip:ro   # dbip-city-lite.mmdb, downloaded by hand, not in Git
+      - /var/log/journal:/var/log/journal:ro
+      - /etc/machine-id:/etc/machine-id:ro
+      - alloy-data:/var/lib/alloy/data
+    mem_limit: 320m       # the GeoIP file (~125 MB) is memory-mapped, so a bit above 256m
+    depends_on:
+      - loki
+
+  # Reads logs from Loki and spots attacks (SSH brute force, web scans, port scans).
+  # WATCH ONLY: no bouncer, no online API (nothing is shared with crowdsec.net).
+  crowdsec:
+    image: crowdsecurity/crowdsec:v1.8.1
+    restart: unless-stopped
+    environment:
+      COLLECTIONS: "crowdsecurity/sshd crowdsecurity/apache2 firewallservices/pf"
+      DISABLE_ONLINE_API: "true"
+    expose:
+      - "6060"            # Prometheus metrics
+    volumes:
+      - /opt/security/crowdsec/acquis.yaml:/etc/crowdsec/acquis.yaml:ro
+      - crowdsec-config:/etc/crowdsec
+      - crowdsec-data:/var/lib/crowdsec/data
+    mem_limit: 256m
+    depends_on:
+      - loki
+
+  # AdGuard Home (Pi) numbers for Prometheus. AdGuard has no login (R-002), so the
+  # user/password below are dummies the exporter insists on. Read-only API calls.
+  adguard-exporter:
+    image: ghcr.io/henrywhitaker3/adguard-exporter:v1.2.1
+    restart: unless-stopped
+    environment:
+      ADGUARD_SERVERS: "http://192.168.178.178:8000"
+      ADGUARD_USERNAMES: "none"
+      ADGUARD_PASSWORDS: "none"
+      INTERVAL: "60s"
+    expose:
+      - "9618"
+    mem_limit: 64m
+
+volumes:
+  loki-data:
+  alloy-data:
+  crowdsec-config:
+  crowdsec-data:
