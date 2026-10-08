@@ -347,13 +347,12 @@ this graph to exist rather than to assume.*
 
 ![Prometheus target health: two scrape pools, both up](assets/screenshots/prometheus-targets.png)
 
-*Prometheus target health: **two scrape pools, both up** — Prometheus itself,
-and `node_exporter` on P1. P2, P3, the Raspberry Pi,
-cAdvisor and the Proxmox API exporter are written into
+*Prometheus target health at the time of the screenshot: two scrape pools, both
+up — Prometheus itself and `node_exporter` on P1. Since then all three nodes are
+scraped, plus the Proxmox API exporter (every node, VM, LXC and storage, through
+a read-only token). The Raspberry Pi and cAdvisor are written into
 [`prometheus.yml`](compose/monitoring/prometheus.yml) and are not yet deployed —
-they are marked as such in the file. Monitoring one of three nodes is a gap, and
-it is listed as one below rather than implied away by a config file that looks
-complete.*
+they are marked as such in the file and listed as a gap below.*
 
 Prometheus **pulls**: it reaches out to each target on an interval, so adding a
 host means editing `prometheus.yml` and installing an exporter, and never
@@ -513,10 +512,9 @@ a repository that lists only strengths is not documentation.
 - **No alerting.** Prometheus collects and Grafana visualises; nothing issues a
   notification when a service fails. Failures are detected by inspection. This
   is the largest gap in the system.
-- **Only P1 is actually scraped.** `prometheus.yml` describes exporters on P2,
-  P3, the Pi and cAdvisor; only P1's `node_exporter` is deployed. The two nodes
-  with no workload are also the two nodes with no metrics, which is exactly
-  backwards from where a surprise would come from.
+- **The Pi and the containers are not scraped.** All three Proxmox nodes and the
+  Proxmox API are monitored. `prometheus.yml` also describes node_exporter on
+  the Pi and cAdvisor in LXC 102; neither is deployed yet.
 - **The game segment has no internal walls.** wings, AMP and the panel share
   `10.10.10.0/24` and are neighbours on one bridge, so traffic between them
   never reaches the firewall. Compromise a game server and you can reach the

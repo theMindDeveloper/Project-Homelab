@@ -37,11 +37,9 @@ Repeat on P1, P2 and P3.
 `prometheus-pve-exporter` reads the Proxmox API and exposes guest states,
 storage usage and cluster health.
 
-```bash
-# in LXC 102
-apt install -y python3-pip
-pip3 install --break-system-packages prometheus-pve-exporter
-```
+It runs as a container next to Prometheus (the `pve-exporter` service in
+[`compose/monitoring/docker-compose.example.yml`](../compose/monitoring/docker-compose.example.yml)).
+Its port is not published: only Prometheus talks to it, by service name.
 
 It needs an API token. Create one with the **minimum** rights it can work with:
 
@@ -49,14 +47,20 @@ It needs an API token. Create one with the **minimum** rights it can work with:
 # on a Proxmox node
 pveum user add prometheus@pve
 pveum acl modify / --users prometheus@pve --roles PVEAuditor
-pveum user token add prometheus@pve monitoring --privsep 0
+pveum user token add prometheus@pve exporter --privsep 0
 ```
 
 `PVEAuditor` is read-only. A monitoring credential that can start and stop
 guests is a monitoring credential that can take the lab down.
 
-The token goes in the exporter's own config file with `chmod 600`, never in this
-repository.
+The token goes in the exporter's own env file with `chmod 600`, never in this
+repository:
+
+```bash
+# in /opt/monitoring, next to docker-compose.yml
+printf 'PVE_USER=prometheus@pve\nPVE_TOKEN_NAME=exporter\nPVE_TOKEN_VALUE=<value>\nPVE_VERIFY_SSL=false\n' > pve-exporter.env
+chmod 600 pve-exporter.env
+```
 
 ---
 
@@ -86,11 +90,11 @@ http://192.168.178.87:9090/targets
 
 ![Prometheus target health](../assets/screenshots/prometheus-targets.png)
 
-*Current state of this lab: two scrape pools, both UP. Only P1 has
-`node_exporter` installed. The targets for P2, P3, the Pi and cAdvisor are
-commented out in `prometheus.yml` rather than left enabled and permanently DOWN,
-because a page of red targets you have learned to ignore is worse than a short
-page of green ones.*
+*The screenshot is from before P2, P3 and pve-exporter were added. Current state
+of this lab: three scrape pools, all UP — Prometheus itself, `node_exporter` on
+all three nodes, and pve-exporter asking the Proxmox API once per node. The Pi
+and cAdvisor are still not scraped. A page of red targets you have learned to
+ignore is worse than a short page of green ones.*
 
 Every target should be **UP**. A target that is DOWN, in order of likelihood:
 
@@ -143,9 +147,28 @@ Note the URL: the **service name** on the compose network. Not an IP, and not
 docker compose restart grafana
 ```
 
-### Import dashboards
+### Dashboards
 
-**Dashboards → New → Import**, by ID:
+Provisioned from files too. A dashboard provider loads every JSON file in
+`/var/lib/grafana/dashboards` into a "Homelab" folder:
+
+```yaml
+# /opt/monitoring/provisioning/dashboards/homelab.yml
+apiVersion: 1
+providers:
+  - name: homelab
+    folder: Homelab
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards
+```
+
+Download each dashboard's JSON from grafana.com, replace its `${DS_PROMETHEUS}`
+input with the data source's `uid`, and drop it in `dashboards/`. This lab
+provisions 1860 and 10347. For a one-off, **Dashboards → New → Import** by ID
+works too:
 
 | ID | Dashboard | Needs |
 |---|---|---|

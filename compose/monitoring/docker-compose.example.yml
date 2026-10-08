@@ -45,6 +45,9 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ./provisioning:/etc/grafana/provisioning:ro
+      # Dashboard JSON files (1860, 10347), loaded by a file provider in
+      # provisioning/dashboards/. They come back by themselves after a rebuild.
+      - ./dashboards:/var/lib/grafana/dashboards:ro
     environment:
       - GF_SECURITY_ADMIN_USER=${GF_ADMIN_USER}
       - GF_SECURITY_ADMIN_PASSWORD=${GF_ADMIN_PASSWORD}
@@ -56,6 +59,19 @@ services:
       # redirects send you to the wrong host behind a reverse proxy.
       - GF_SERVER_ROOT_URL=${GF_ROOT_URL}
       - TZ=Europe/Berlin
+    security_opt:
+      - no-new-privileges:true
+
+  # Reads the Proxmox API with a read-only token (PVEAuditor) and reports
+  # every node, VM, LXC and storage. Only Prometheus talks to it, so the port
+  # is not published.
+  pve-exporter:
+    image: prompve/prometheus-pve-exporter:3.10.1
+    container_name: pve-exporter
+    restart: unless-stopped
+    env_file: pve-exporter.env   # PVE_USER, PVE_TOKEN_NAME, PVE_TOKEN_VALUE, PVE_VERIFY_SSL; chmod 600
+    expose:
+      - "9221"
     security_opt:
       - no-new-privileges:true
 
