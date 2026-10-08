@@ -299,7 +299,6 @@ which is what Nextcloud's `TRUSTED_PROXIES` is for.
 | 9090 | Prometheus | LAN |
 | 9100 | node_exporter | LAN |
 | 9442 / 9443 | Portainer | LAN |
-| 2283 | Immich | LAN |
 | 8096 | Jellyfin | LAN |
 | 8085 | qBittorrent web UI, published on gluetun (NAS) | LAN |
 

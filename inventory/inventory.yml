@@ -385,12 +385,6 @@ services:
     exposure: lan
     role: media server - lives next to the library, so no network share
 
-  - name: Immich
-    host: nas
-    runtime: docker
-    exposure: lan
-    role: photo library
-
   - name: Syncthing
     host: nas
     runtime: docker

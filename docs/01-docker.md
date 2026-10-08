@@ -445,7 +445,7 @@ denied while the world can reach it.
 |---|---|
 | LXC 102 on P1 | Glance, Vaultwarden, Portainer, Grafana, Prometheus, Apache, cloudflared |
 | Raspberry Pi 5 | Nginx Proxy Manager, AdGuard Home, Portainer |
-| NAS (UGOS Pro) | Jellyfin, Immich, Syncthing |
+| NAS (UGOS Pro) | Jellyfin, Syncthing |
 | LXC 105 | Pterodactyl Wings, which runs each game server as its own container |
 
 Every compose file is in [`compose/`](../compose/), as an example with variables

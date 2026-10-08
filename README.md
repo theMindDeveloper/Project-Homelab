@@ -87,7 +87,7 @@ inbound port is open for issuance or renewal.
 
 A UGREEN DH4300 Plus holds media, photographs and backup archives across two
 volumes: a 1 TB Basic/Btrfs disk kept separate and detachable, and a 2 × 6 TB
-RAID 1/EXT4 array (~6 TB usable). Jellyfin, Immich and Syncthing run on the
+RAID 1/EXT4 array (~6 TB usable). Jellyfin and Syncthing run on the
 NAS rather than in the cluster, placing the applications next to the data they
 serve and removing both a network share and a hardware-passthrough problem.
 
@@ -320,7 +320,7 @@ information about which ports are externally reachable.
 | Service | Purpose |
 |---|---|
 | Jellyfin (`jelly.`) | media server — runs next to the library at `192.168.178.49`, so no network share and no passthrough problem |
-| Immich | photo library |
+| UGOS Photos | photo library, the NAS's built-in app |
 | Syncthing | file sync between devices |
 | qBittorrent + gluetun | torrents, **only** through Mullvad. qBittorrent lives in gluetun's network namespace, web UI on `:8085` is published on gluetun. [compose](compose/torrent-vpn/docker-compose.example.yml) · [runbook 20](runbooks/20-qbittorrent-behind-gluetun.md) |
 

@@ -286,7 +286,7 @@ Then add a **Local** external storage pointing at a second bind mount, set up
 exactly like steps 3 to 5 but with a different share, and mark it read-only.
 
 Use it when the NAS is the source of truth for those files and something else,
-Jellyfin, Immich, Syncthing, is already managing them. Do not use it for files
+Jellyfin, Syncthing, UGOS Photos, is already managing them. Do not use it for files
 you want Nextcloud to sync and version. The two mechanisms answer different
 questions and mixing them up is the most common way to end up with a duplicated
 photo library.
