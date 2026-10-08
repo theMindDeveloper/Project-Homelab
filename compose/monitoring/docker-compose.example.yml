@@ -45,7 +45,7 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ./provisioning:/etc/grafana/provisioning:ro
-      # Dashboard JSON files (1860, 10347), loaded by a file provider in
+      # Dashboard JSON files (Homelab Overview, 1860, 10347), loaded by a file provider in
       # provisioning/dashboards/. They come back by themselves after a rebuild.
       - ./dashboards:/var/lib/grafana/dashboards:ro
     environment:
@@ -58,6 +58,8 @@ services:
       # Grafana builds absolute URLs from this. Get it wrong and login
       # redirects send you to the wrong host behind a reverse proxy.
       - GF_SERVER_ROOT_URL=${GF_ROOT_URL}
+      # Open the one-page Homelab Overview after login instead of an empty home.
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/homelab-overview.json
       - TZ=Europe/Berlin
     security_opt:
       - no-new-privileges:true
