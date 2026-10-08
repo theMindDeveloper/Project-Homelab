@@ -1,0 +1,56 @@
+# WUD (What's Up Docker) - one per Docker host (LXC 102, the Pi, the NAS)
+# Checks which containers on this host have newer image versions. It only
+# READS: it talks to Docker through a socket proxy that allows reads only
+# (POST=0) and is not reachable from the network (internal network).
+# No notifications or auto-updates are configured. Renovate makes the PRs;
+# this only feeds the "Versions" box on Glance.
+# Secrets live in .env next to this file (not in Git), see .env.example.
+services:
+  socket-proxy:
+    image: lscr.io/linuxserver/socket-proxy:3.4.6
+    container_name: wud-socket-proxy
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /run
+    environment:
+      # read-only: list containers + images, events, version/info. No writes.
+      - CONTAINERS=1
+      - IMAGES=1
+      - EVENTS=1
+      - INFO=1
+      - VERSION=1
+      - PING=1
+      - POST=0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - wud-internal
+
+  wud:
+    image: getwud/wud:9.3.0
+    container_name: wud
+    restart: unless-stopped
+    depends_on:
+      - socket-proxy
+    environment:
+      - TZ=Europe/Berlin
+      - WUD_WATCHER_${WUD_HOST_NAME:-local}_HOST=wud-socket-proxy
+      - WUD_WATCHER_${WUD_HOST_NAME:-local}_PORT=2375
+      # check once a day at 05:00 (Docker Hub has rate limits)
+      - WUD_WATCHER_${WUD_HOST_NAME:-local}_CRON=0 5 * * *
+      # also show stopped containers (they appear as "not running")
+      - WUD_WATCHER_${WUD_HOST_NAME:-local}_WATCHALL=true
+      - WUD_AUTH_ADMIN_USER=admin
+      - WUD_AUTH_ADMIN_PASSWORD=${WUD_ADMIN_PASSWORD}
+    volumes:
+      - ./store:/store
+    ports:
+      - "3003:3000"
+    networks:
+      - wud-internal
+      - default
+
+networks:
+  wud-internal:
+    internal: true
