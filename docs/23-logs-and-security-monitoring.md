@@ -41,6 +41,21 @@ All four run from [`compose/security/docker-compose.example.yml`](../compose/sec
 started in the **same compose project** as the monitoring stack, so Grafana,
 Prometheus, Loki and CrowdSec find each other by name.
 
+**Keep internet-facing containers off that network.** Loki has no login, and
+pve-exporter has a property worth knowing: it sends its Proxmox API token to
+**whatever host** a caller names in `/pve?target=...`. Anything that can reach
+pve-exporter can therefore make it hand the token to a server of its choice.
+That is fine on a network that only holds the monitoring containers. It is not
+fine if the public website or the tunnel connector sits on the same Docker
+network, because then a compromised website is one HTTP request away from the
+Proxmox token. Give the monitoring containers their own network (the compose
+examples do: `networks: [monitoring]`).
+
+**Anyone on the LAN can send syslog to UDP 1514.** Alloy cannot check who sent
+a line, so a device on the LAN could inject fake firewall lines (fake visitors
+on the map, a fake CrowdSec alert). Low impact for a watch-only setup; a host
+firewall rule that only accepts 1514 from the OPNsense address closes it.
+
 ---
 
 ## Where the logs come from

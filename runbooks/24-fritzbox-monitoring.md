@@ -54,9 +54,14 @@ In the FRITZ!Box UI (German menu names, English in brackets):
    button on the box or on a connected phone. **Rights only take effect after
    that confirmation.**
 
-"FRITZ!Box settings" sounds like a lot. Through TR-064 the exporter only ever
-*reads*; it never calls a setter. The right is needed because the box treats
-reading status as part of that permission.
+**Be honest about what this right means.** The exporter only ever *reads*; it
+never calls a setter. But the FRITZ!Box has no read-only role: with this user
+and password, TR-064 can also **change router settings** (port forwards, Wi-Fi,
+DNS). So treat the password like a router admin password: long, random, only in
+`fritz.env` (mode 600) and your password manager, **never pasted into a chat,
+ticket or AI prompt**. If it ever is, change it in the FRITZ!Box and in
+`fritz.env`. Internet access for the user stays off, so it only works from inside
+the LAN.
 
 ---
 

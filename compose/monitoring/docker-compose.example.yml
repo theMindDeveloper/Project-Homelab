@@ -32,6 +32,7 @@
 services:
 
   prometheus:
+    networks: [monitoring]   # NOT the default network: see the note at the end
     image: prom/prometheus:v3.13.2
     restart: unless-stopped
     ports:
@@ -54,6 +55,7 @@ services:
       - no-new-privileges:true
 
   grafana:
+    networks: [monitoring]   # NOT the default network: see the note at the end
     image: grafana/grafana:13.1.3
     restart: unless-stopped
     depends_on:
@@ -89,6 +91,7 @@ services:
   # every node, VM, LXC and storage. Only Prometheus talks to it, so the port
   # is not published ("expose" = reachable on the Docker network only).
   pve-exporter:
+    networks: [monitoring]   # NOT the default network: see the note at the end
     image: prompve/prometheus-pve-exporter:3.10.1
     restart: unless-stopped
     env_file: pve-exporter.env   # see pve-exporter.env.example
@@ -101,6 +104,7 @@ services:
   # traffic, Wi-Fi clients, known devices, MyFRITZ on/off, firmware updates.
   # Uses its own FRITZ!Box user with ONLY the "FRITZ!Box settings" right.
   fritz-exporter:
+    networks: [monitoring]   # NOT the default network: see the note at the end
     image: pdreker/fritz_exporter:3.5.1
     restart: unless-stopped
     env_file: fritz.env          # see fritz.env.example
@@ -122,6 +126,7 @@ services:
   # Ready-made exporters exist but have 0-50 GitHub stars; not worth trusting
   # with panel credentials when 150 readable lines do the job.
   game-exporter:
+    networks: [monitoring]   # NOT the default network: see the note at the end
     image: python:3.13.16-alpine
     restart: unless-stopped
     command: ["python", "-I", "/app/game_exporter.py"]
@@ -139,3 +144,10 @@ services:
 volumes:
   prometheus-data:
   grafana-data:
+
+# Own network for everything that holds a secret or sees all logs. Internet-facing
+# containers (the website, the tunnel connector) must never join it: pve-exporter
+# sends its Proxmox token to whatever host a caller names, and Loki has no login.
+# Both compose files of the project declare it; the second one reuses it.
+networks:
+  monitoring: {}

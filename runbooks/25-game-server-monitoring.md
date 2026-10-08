@@ -48,14 +48,25 @@ out: no data, so no alerts.
 
 ### AMP
 
-Use (or create, in AMP → *Configuration → User Management*) an AMP user whose
-role may **view** instances. It does not need to start, stop or configure
-anything. The exporter only calls `Core/Login` and `ADSModule/GetInstances`.
+Create a **separate AMP user** (AMP → *Configuration → User Management*) with a
+role that may only **view** instances. Do not reuse your admin login or a broad
+role: the password sits in `game-exporter.env`, and whatever that user may do,
+anyone who reads that file may do. The exporter only calls `Core/Login` and
+`ADSModule/GetInstances`.
+
+Both panels are spoken to over plain **HTTP** inside the lab (house LAN → DMZ),
+so these logins cross the network unencrypted. That is acceptable only because
+they are low-privilege monitoring users; it is one more reason not to reuse an
+admin login here.
 
 ### Pterodactyl
 
-Log in to the panel as a **non-admin user** that is a subuser on the servers
-you want to watch (it then sees exactly those servers). Then
+Use a **separate panel user just for monitoring**, not your own and not an
+admin. Add it as a subuser on each server you want to watch with **as few
+permissions as possible**: it only has to *see* the server. Do not give it
+*Control* (start/stop/console), *Files* or *Backups*. A key for a user with those
+can stop servers, read the world files and delete backups, even though the
+exporter never would. Then, logged in as that user,
 **Account → API Credentials → Create**:
 
 - Description: `game-exporter`
