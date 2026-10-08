@@ -159,7 +159,7 @@ providers:
   - name: homelab
     folder: Homelab
     type: file
-    disableDeletion: true
+    disableDeletion: false   # remove a JSON file -> Grafana removes that dashboard
     allowUiUpdates: false
     options:
       path: /var/lib/grafana/dashboards
@@ -167,8 +167,10 @@ providers:
 
 Download each dashboard's JSON from grafana.com, replace its `${DS_PROMETHEUS}`
 input with the data source's `uid`, and drop it in `dashboards/`. This lab
-provisions 1860 and 10347. For a one-off, **Dashboards → New → Import** by ID
-works too:
+started with 1860 and 10347 and has since replaced both with its own generated
+dashboards (Overview, Hosts, Security; see [docs/08](../docs/08-monitoring.md)).
+After changing `disableDeletion`, restart Grafana once so the provider re-reads it.
+For a one-off, **Dashboards → New → Import** by ID works too:
 
 | ID | Dashboard | Needs |
 |---|---|---|
