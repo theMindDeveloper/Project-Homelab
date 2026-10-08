@@ -1,225 +1,268 @@
 # Runbook 10 · Prometheus, Grafana and the exporters
 
-**Goal** Metrics from all three nodes, the Pi and every container, stored for 90
-days and drawn in Grafana.
+**Goal** Numbers from all three Proxmox nodes, the Raspberry Pi, the NAS and the
+Proxmox API in Prometheus, drawn on generated Grafana dashboards.
 
-**Time** 45 minutes.
-**Prerequisites** Docker on LXC 102. root on each node.
-**Reverses cleanly?** Yes.
+**Time** 60-90 minutes the first time.
+**Prerequisites** Docker on LXC 102 ([runbook 02](02-portainer-on-a-new-lxc.md)).
+A shell as root on each Proxmox node (web UI → node → *Shell*). SSH to the Pi.
+The NAS's web UI. A copy of this repository on LXC 102 (`git clone`).
+**Reverses cleanly?** Yes. Everything here only *reads*; nothing it installs can
+change a guest, a disk or a setting. See *Undo*.
 
-Concepts and PromQL: [`docs/08-monitoring.md`](../docs/08-monitoring.md).
-
-![Node Exporter Full on P1](../assets/screenshots/grafana-node-exporter-p1.png)
-
-*The finished state: dashboard 1860 against P1, seven days of history.*
+Concepts: [docs/08](../docs/08-monitoring.md). Next steps after this one:
+logs ([21](21-logs-and-crowdsec.md)), alerts ([23](23-alerts-to-telegram.md)),
+router ([24](24-fritzbox-monitoring.md)), game servers ([25](25-game-server-monitoring.md)).
 
 ---
 
-## 1 · Exporters first
+## 0 · The plan, in one picture
 
-Prometheus **pulls**. Nothing works until there is something to pull from.
+```
+ pve  pve2  pve3        Pi            NAS           Proxmox API
+  |     |     |          |             |                 |
+ node_exporter (apt)   node_exporter (container)    pve-exporter (container on LXC 102)
+  \_____\_____\__________/_____________/_________________/
+                         |
+            Prometheus on LXC 102 asks each one every 15 s  ("scrape")
+                         |
+                Grafana on LXC 102 draws it
+```
 
-### On each Proxmox node
+Every exporter **only answers questions**. Prometheus is the one that asks.
 
-Installed on the host with apt, not in a container, because it reports on the
-machine and needs the machine's view of `/proc` and `/sys`.
+---
+
+## 1 · node_exporter on each Proxmox node
+
+node_exporter reports CPU, RAM, disks, network and temperatures of the machine
+it runs on. On the Proxmox nodes it is installed **on the host** with apt, not in
+a container, because it needs the host's own view of `/proc` and `/sys`.
+
+On **pve**, then **pve2**, then **pve3** (web UI → node → *Shell*):
 
 ```bash
 apt install -y prometheus-node-exporter
 systemctl enable --now prometheus-node-exporter
-curl -s localhost:9100/metrics | head
+curl -s localhost:9100/metrics | grep ^node_uname_info
 ```
 
-Repeat on P1, P2 and P3.
+The last line must print one line starting with `node_uname_info{...}`. If it
+prints nothing, `systemctl status prometheus-node-exporter` says why.
 
-### Cluster metrics
+Nothing else on the node changes. The package is from Debian's own repository.
 
-`prometheus-pve-exporter` reads the Proxmox API and exposes guest states,
-storage usage and cluster health.
+---
 
-It runs as a container next to Prometheus (the `pve-exporter` service in
-[`compose/monitoring/docker-compose.example.yml`](../compose/monitoring/docker-compose.example.yml)).
-Its port is not published: only Prometheus talks to it, by service name.
+## 2 · node_exporter on the Raspberry Pi
 
-It needs an API token. Create one with the **minimum** rights it can work with:
+On the Pi it runs as a small container, read-only, 64 MB cap.
 
 ```bash
-# on a Proxmox node
-pveum user add prometheus@pve
+# on the Pi
+sudo mkdir -p /root/docker/node-exporter
+sudo cp compose/node-exporter/docker-compose.example.yml /root/docker/node-exporter/docker-compose.yml
+cd /root/docker/node-exporter && sudo docker compose up -d
+curl -s localhost:9100/metrics | grep -c ^node_
+```
+
+The file is [`compose/node-exporter/docker-compose.example.yml`](../compose/node-exporter/docker-compose.example.yml).
+`network_mode: host` and `pid: host` let it see the Pi's real network and
+processes; `/:/host:ro,rslave` gives it the Pi's file systems **read-only**.
+
+**Do not put a `$` in a compose file** unless you mean a variable. A regex like
+`($|/)` in the command makes `docker compose` (and UGOS) reject the whole file.
+The default settings already exclude the right mount points.
+
+---
+
+## 3 · node_exporter on the NAS (UGOS)
+
+UGOS has a Docker app, but its compose import **refuses** files that mount the
+host's root folder ("Invalid configuration file", nothing more). So the
+container is made in the UGOS **Docker → Image** screens instead:
+
+1. **Docker → Image → search** `prom/node-exporter` → **Download** → in
+   *Version Number* type `v1.12.1` (not a `master...` tag, those are
+   development builds) → **Confirm**.
+2. On the image: **Create container**.
+3. **Basic information**
+   - Container name: `node-exporter`
+   - Memory limit: *Custom* → `64` MB
+   - **Auto restart: ON** (otherwise it stays off after a NAS reboot)
+4. **Volume**: one row **per disk volume**, so the exporter can see how full
+   each one is. UGOS only offers shared folders, which is fine:
+   - pick an (empty) shared folder **on volume 1**, container path
+     `/disks/volume1`, **Read-only**
+   - pick a folder **on volume 2** (or 3, ...), container path
+     `/disks/volume2`, **Read-only**
+   - and so on. The exporter never reads the folders' content; it only asks
+     the volume underneath how big and how full it is.
+5. **Network**: **bridge** with port mapping NAS `9100` → container `9100` (TCP),
+   or **host**. Host mode makes the network graphs show the NAS's real traffic;
+   in bridge mode they show only the exporter's own.
+6. **Others → Container run command**: leave empty. **Privileged mode**: off.
+7. **Confirm**, then check from any machine:
+
+```bash
+curl -s http://192.168.178.79:9100/metrics | grep -E '^node_filesystem_size_bytes.*disks'
+```
+
+One line per `/disks/...` folder means it worked. If the port is closed, check
+the container is *Running* and the NAS firewall (*Control Panel → Security →
+Firewall*) allows TCP 9100 from the LAN.
+
+What you get on the NAS: CPU, RAM, CPU temperature, disk activity per HDD and
+fill level per volume. HDD temperatures are not exposed this way; UGOS's own
+storage page still shows them.
+
+---
+
+## 4 · A read-only Proxmox user for pve-exporter
+
+pve-exporter asks the Proxmox **API** and reports every node, VM, LXC and storage
+(states, CPU, RAM, disk, backups, "start at boot"). It needs an API token. Give it
+the smallest role that works, **PVEAuditor** (read-only): a monitoring
+credential that can stop guests is a monitoring credential that can take the lab
+down.
+
+On **one** Proxmox node (the cluster shares users):
+
+```bash
+pveum user add prometheus@pve --comment "pve-exporter, read-only"
 pveum acl modify / --users prometheus@pve --roles PVEAuditor
 pveum user token add prometheus@pve exporter --privsep 0
 ```
 
-`PVEAuditor` is read-only. A monitoring credential that can start and stop
-guests is a monitoring credential that can take the lab down.
+The last command prints a table with a `value`. **That value is shown once.**
+Copy it now. `--privsep 0` means the token has exactly the user's rights, which
+are read-only.
 
-The token goes in the exporter's own env file with `chmod 600`, never in this
-repository:
+Check that it really is read-only (from LXC 102, replace `<value>`):
 
 ```bash
-# in /opt/monitoring, next to docker-compose.yml
-printf 'PVE_USER=prometheus@pve\nPVE_TOKEN_NAME=exporter\nPVE_TOKEN_VALUE=<value>\nPVE_VERIFY_SSL=false\n' > pve-exporter.env
-chmod 600 pve-exporter.env
+curl -sk -H "Authorization: PVEAPIToken=prometheus@pve!exporter=<value>" \
+  https://192.168.178.20:8006/api2/json/access/permissions | grep -o '"[A-Za-z.]*Audit[A-Za-z.]*":1' | sort -u
 ```
+
+Only `...Audit` permissions may appear.
 
 ---
 
-## 2 · Prometheus and Grafana
+## 5 · Prometheus, Grafana and pve-exporter on LXC 102
 
 ```bash
+# on LXC 102, as root
 mkdir -p /opt/monitoring && cd /opt/monitoring
-cp /path/to/compose/monitoring/docker-compose.example.yml docker-compose.yml
-cp /path/to/compose/monitoring/prometheus.yml .
-cp /path/to/compose/monitoring/.env.example .env
-$EDITOR .env                 # Grafana admin credentials
-chmod 600 .env
-docker compose config
-docker compose up -d
+cp -r /path/to/repo/compose/monitoring/. .
+mv docker-compose.example.yml docker-compose.yml
+
+# secrets: one env file each, never in Git
+cp .env.example .env                       && $EDITOR .env                 # Grafana admin
+cp pve-exporter.env.example pve-exporter.env && $EDITOR pve-exporter.env   # token from step 4
+cp alerting.env.example alerting.env       # fill in later, runbook 23
+cp fritz.env.example fritz.env             # fill in later, runbook 24
+cp game-exporter.env.example game-exporter.env   # fill in later, runbook 25
+chmod 600 *.env
 ```
 
-Files:
-[`compose/monitoring/`](../compose/monitoring/)
+The compose file has five services; the router and game exporters come later.
+For now start only what this runbook needs:
+
+```bash
+docker compose -p stacks config -q && echo OK      # catches typos and stray $
+docker compose -p stacks up -d prometheus grafana pve-exporter
+```
+
+`-p stacks` is the project name. The log stack ([runbook 21](21-logs-and-crowdsec.md))
+uses the same name so all containers share one network. **Never run
+`docker compose ... --remove-orphans`** on this project: it deletes the
+containers that belong to the *other* compose file.
+
+Look at [`prometheus/prometheus.yml`](../compose/monitoring/prometheus/prometheus.yml):
+every job is commented. Jobs for things you have not set up yet
+(`fritzbox`, `games`, `crowdsec`, `adguard`) will show DOWN until you do; remove
+them if you never will.
 
 ---
 
-## 3 · Check every target is up
+## 6 · Check every target is UP
 
 ```
 http://192.168.178.87:9090/targets
 ```
 
-![Prometheus target health](../assets/screenshots/prometheus-targets.png)
-
-*The screenshot is from before P2, P3 and pve-exporter were added. Current state
-of this lab: three scrape pools, all UP — Prometheus itself, `node_exporter` on
-all three nodes, and pve-exporter asking the Proxmox API once per node. The Pi
-and cAdvisor are still not scraped. A page of red targets you have learned to
-ignore is worse than a short page of green ones.*
-
-Every target should be **UP**. A target that is DOWN, in order of likelihood:
+Every line should say **UP**. A target that is DOWN, in order of likelihood:
 
 | Cause | Check |
 |---|---|
 | the exporter is not installed or not running | `systemctl status prometheus-node-exporter` on that host |
-| a firewall or the exporter bound to localhost | `ss -tlnp \| grep 9100` on that host |
+| a firewall, or the exporter listening on localhost only | `ss -tlnp \| grep 9100` on that host |
 | **`localhost` used as a target address** | `localhost` means the Prometheus container, not the host |
+| the job is for something not set up yet | expected, see step 5 |
 
-That last one is the classic. `localhost:9100` in `prometheus.yml` points
-Prometheus at itself.
-
-Reload the configuration without restarting:
+After any edit of `prometheus.yml`, reload without restarting:
 
 ```bash
-curl -X POST http://localhost:9090/-/reload
+docker kill -s HUP stacks-prometheus-1
 ```
 
-which works because the compose file passes `--web.enable-lifecycle`.
+Then in Prometheus → *Graph*, run `up`: one line per target, 1 or 0.
 
 ---
 
-## 4 · Grafana
+## 7 · Grafana
 
 ```
 http://192.168.178.87:3000
 ```
 
-Log in with the credentials from `.env`.
+Log in with the user from `.env`. Change the password if asked.
 
-**Provision the data source in a file, not by clicking.** A Grafana whose
-configuration exists only in its own volume is a Grafana you reconfigure by hand
-after every rebuild.
-
-```yaml
-# /opt/monitoring/provisioning/datasources/prometheus.yml
-apiVersion: 1
-datasources:
-  - name: Prometheus
-    type: prometheus
-    access: proxy
-    url: http://prometheus:9090
-    isDefault: true
-```
-
-Note the URL: the **service name** on the compose network. Not an IP, and not
-`localhost`.
+There is nothing to click: the data sources (Prometheus, Loki) and the dashboard
+folder come from `grafana/provisioning/`. What is missing is the dashboards
+themselves, which are generated:
 
 ```bash
-docker compose restart grafana
+# on any machine with Python 3 and this repository
+$EDITOR scripts/grafana/queries.py     # GAME_PORTS: your game ports (or leave the examples)
+python3 scripts/grafana/gen_all.py     # writes 4 JSON files into compose/monitoring/grafana/dashboards/
+# copy them to /opt/monitoring/grafana/dashboards/ on LXC 102
 ```
 
-### Dashboards
+Grafana picks them up within about 10 seconds. *Dashboards → Homelab* then has
+Overview, Hosts, Games and Security. Panels for parts you have not set up yet
+(logs, router, games) stay empty until you do.
 
-Provisioned from files too. A dashboard provider loads every JSON file in
-`/var/lib/grafana/dashboards` into a "Homelab" folder:
-
-```yaml
-# /opt/monitoring/provisioning/dashboards/homelab.yml
-apiVersion: 1
-providers:
-  - name: homelab
-    folder: Homelab
-    type: file
-    disableDeletion: false   # remove a JSON file -> Grafana removes that dashboard
-    allowUiUpdates: false
-    options:
-      path: /var/lib/grafana/dashboards
-```
-
-Download each dashboard's JSON from grafana.com, replace its `${DS_PROMETHEUS}`
-input with the data source's `uid`, and drop it in `dashboards/`. This lab
-started with 1860 and 10347 and has since replaced both with its own generated
-dashboards (Overview, Hosts, Security; see [docs/08](../docs/08-monitoring.md)).
-After changing `disableDeletion`, restart Grafana once so the provider re-reads it.
-For a one-off, **Dashboards → New → Import** by ID works too:
-
-| ID | Dashboard | Needs |
-|---|---|---|
-| **1860** | Node Exporter Full | node_exporter |
-| **193** | Docker monitoring | cAdvisor |
-| **10347** | Proxmox | pve-exporter |
-
-Start with 1860. It is overwhelming, and reading through it is a good way to
-learn what node_exporter actually exposes.
+Why generated, and how to change them: [docs/25](../docs/25-dashboards-as-code.md).
 
 ---
 
-## 5 · Verify with real queries
+## 8 · Verify with real queries
 
-In **Explore**, run each of these. If one returns nothing, that exporter is not
-being scraped.
+In Grafana → *Explore* → Prometheus, run each. Nothing returned = that exporter
+is not being scraped.
 
 ```promql
 up
-100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
-100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)
-100 * (1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})
-container_memory_usage_bytes{name!=""}
+1 - avg by (node) (rate(node_cpu_seconds_total{mode="idle"}[5m]))
+1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes
+count(pve_up)              # number of nodes + guests + storages Proxmox knows
+max by (node) (node_thermal_zone_temp)
 ```
 
-`up` first. It lists every target with a 1 or a 0 and immediately shows what is
-missing.
+On the **Overview** dashboard every node tile should be green and every bar
+filled.
 
 ---
 
-## 6 · Put it behind the proxy
+## 9 · Put it behind the proxy
 
-Per [Runbook 04](04-nginx-proxy-manager-vhost.md):
-`grafana.theminddev.com` → `192.168.178.87:3000`, scheme `http`, WebSockets on
-(Grafana Live uses them).
+Per [Runbook 04](04-nginx-proxy-manager-vhost.md): `grafana.example.com` →
+`192.168.178.87:3000`, scheme `http`, WebSockets on (Grafana Live uses them).
 
-Set `GF_SERVER_ROOT_URL` in `.env` to the external URL. Grafana builds absolute
-URLs from it, and getting it wrong sends login redirects to the wrong host.
-
----
-
-## 7 · What is deliberately not done here
-
-**Alerting.** Prometheus collects, Grafana draws, and **nothing tells you when
-something breaks**. Alertmanager is not deployed. This is the largest gap in the
-lab and it is in the README's known limitations rather than quietly omitted.
-
-The rules that would matter, ready to deploy, are in
-[`docs/08-monitoring.md`](../docs/08-monitoring.md#the-gap-nothing-alerts).
+Set `GF_SERVER_ROOT_URL` in the compose file to that address. Grafana builds
+absolute URLs from it, including the "Open Grafana" link in every alert.
 
 ---
 
@@ -227,9 +270,27 @@ The rules that would matter, ready to deploy, are in
 
 | Symptom | Cause |
 |---|---|
-| target DOWN | exporter not running, or `localhost` used as the address |
-| Grafana shows "no data" | wrong data source URL — use `http://prometheus:9090` |
+| target DOWN | exporter not running, firewall, or `localhost` used as the address |
+| Grafana shows "no data" | wrong data source URL: use `http://prometheus:9090`, the service name |
+| every Proxmox gauge appears three times | cluster data asked from every node; ask one (`pve` job) as in the example |
+| NAS: "Invalid configuration file" | UGOS rejects root mounts in compose; use the Image → Create container screens (step 3) |
+| NAS: port 9100 closed but container running | bridge mode without port mapping, or the NAS firewall |
+| `docker compose` complains about a variable | a `$` in the file; write `$$` or remove it |
 | Prometheus memory grows without bound | cardinality: a label with unbounded values |
-| gaps in graphs | scrapes timing out — raise `scrape_timeout` |
-| cAdvisor shows no disk stats | expected inside an unprivileged LXC |
+| gaps in graphs | scrapes timing out, raise `scrape_timeout` for that job |
 | data lost on restart | no named volume for `/prometheus` |
+
+---
+
+## Undo
+
+```bash
+# LXC 102
+cd /opt/monitoring && docker compose -p stacks rm -s -f prometheus grafana pve-exporter
+# each Proxmox node
+apt remove prometheus-node-exporter
+pveum user delete prometheus@pve
+# Pi
+cd /root/docker/node-exporter && docker compose down
+# NAS: delete the node-exporter container in the UGOS Docker app
+```

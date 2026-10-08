@@ -11,6 +11,9 @@ or a Debian container. Each one has its usage in the header; run it with
 | [`install-docker.sh`](install-docker.sh) | inside a fresh Debian LXC, as root | Docker Engine plus the Compose plugin, from Docker's own repository, with log rotation configured. |
 | [`backup-all.sh`](backup-all.sh) | a Proxmox node, as root | `vzdump` every guest with retention and a readable summary. Built for cron. |
 | [`health-check.sh`](health-check.sh) | anywhere on the LAN | Checks every address in the inventory. Exits non-zero if anything is down. |
+| [`grafana/gen_all.py`](grafana/gen_all.py) | any machine with Python 3 | Writes the four Grafana dashboards (Overview, Hosts, Games, Security) as JSON. Edit the generators, never the JSON. [docs/25](../docs/25-dashboards-as-code.md) |
+| [`grafana/gen_alerts.py`](grafana/gen_alerts.py) | any machine with Python 3 | Writes the Grafana alert rules (`rules.yml`). [docs/24](../docs/24-alerting.md) |
+| [`grafana/check_dashboards.py`](grafana/check_dashboards.py) | on the Docker network of the monitoring stack | Runs every dashboard and alert query against the live Prometheus and Loki, read-only, and checks the panel layout. [runbook 26](../runbooks/26-test-grafana-changes-safely.md) |
 
 ## First thing to run
 

@@ -1,0 +1,31 @@
+# Where alerts go: your own Telegram bot. Grafana calls the Telegram API directly;
+# no relay, no AI agent in between. Runbook: runbooks/23-alerts-to-telegram.md
+# Token + chat id come from alerting.env (chmod 600, not in Git) as environment
+# variables. Contact-point files expand ${VAR}; alert-rule files do NOT.
+apiVersion: 1
+contactPoints:
+  - orgId: 1
+    name: telegram
+    receivers:
+      - uid: telegram-homelab
+        type: telegram
+        disableResolveMessage: false
+        settings:
+          bottoken: ${TELEGRAM_BOT_TOKEN}
+          chatid: "${TELEGRAM_CHAT_ID}"
+          parse_mode: HTML
+          disable_web_page_preview: true
+          message: '{{ template "homelab.message" . }}'
+  # Game servers: same bot, but no "OK again" message (the stop alert ends by itself after 10 min).
+  - orgId: 1
+    name: telegram-games
+    receivers:
+      - uid: telegram-games
+        type: telegram
+        disableResolveMessage: true
+        settings:
+          bottoken: ${TELEGRAM_BOT_TOKEN}
+          chatid: "${TELEGRAM_CHAT_ID}"
+          parse_mode: HTML
+          disable_web_page_preview: true
+          message: '{{ template "homelab.message" . }}'

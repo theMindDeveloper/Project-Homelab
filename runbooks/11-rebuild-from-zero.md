@@ -37,7 +37,7 @@ The order is not arbitrary. Each layer depends on the one before it.
 5. cluster        P2, P3, quorum
 6. Docker host    LXC 102
 7. secrets        Vaultwarden FIRST           <- everything else needs it
-8. observability  Prometheus, Grafana, Glance
+8. observability  Glance, Prometheus, Grafana, logs, alerts
 9. services       everything else
 10. verify        the checklist at the bottom
 ```
@@ -149,7 +149,24 @@ Then log in and **verify you can read an actual password** before continuing.
 
 Glance first — it is five minutes and it gives you a checklist that updates
 itself as you bring services back.
-→ [Runbook 05](05-glance-dashboard.md), [Runbook 10](10-monitoring-stack.md)
+→ [Runbook 05](05-glance-dashboard.md)
+
+Then the monitoring stack, in this order, because each step makes the next one
+easier to verify:
+
+1. Prometheus, Grafana, the exporters → [Runbook 10](10-monitoring-stack.md)
+2. **Alerts to Telegram** → [Runbook 23](23-alerts-to-telegram.md). Early, on
+   purpose: from here on, anything that breaks while you rebuild the rest tells
+   you itself.
+3. Logs and CrowdSec → [Runbook 21](21-logs-and-crowdsec.md), the website's real
+   visitor IP → [Runbook 22](22-real-visitor-ip-behind-a-tunnel.md)
+4. Router and game servers → [Runbook 24](24-fritzbox-monitoring.md),
+   [Runbook 25](25-game-server-monitoring.md)
+
+Grafana needs no clicking: its data sources, dashboards and alert rules all come
+from [`compose/monitoring/grafana/`](../compose/monitoring/grafana/) and
+`scripts/grafana/gen_all.py`. The secrets (`.env`, `pve-exporter.env`,
+`alerting.env`, `fritz.env`, `game-exporter.env`) come from Vaultwarden.
 
 ---
 
@@ -180,6 +197,8 @@ Then by hand:
 - [ ] Vaultwarden opens and shows real entries
 - [ ] `pvecm status` says Quorate on all three nodes
 - [ ] Prometheus `/targets` all UP
+- [ ] Grafana → *Alerting → Contact points → telegram → Test* arrives on the phone
+- [ ] Grafana → *Alerting → Alert rules*: all Normal
 - [ ] a backup job runs and produces an archive
 - [ ] **restore one guest** → [Runbook 09](09-backup-restore-drill.md)
 

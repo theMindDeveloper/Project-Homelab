@@ -1,7 +1,10 @@
 # Security monitoring. It only WATCHES and REPORTS. Nothing here blocks traffic
 # (CrowdSec has no bouncer, so its "decisions" are only shown, never enforced).
-# Run with the same project as monitoring.yml so Grafana + Prometheus reach these by name:
-#   docker compose -p stacks -f security.yml up -d      (never --remove-orphans)
+# Folder /opt/security on LXC 102. Runbook: runbooks/21-logs-and-crowdsec.md
+# Concepts: docs/23-logs-and-security-monitoring.md
+# Run with the SAME project name as compose/monitoring, so Grafana and Prometheus
+# reach these containers by name (loki, crowdsec, adguard-exporter):
+#   docker compose -p stacks -f docker-compose.yml up -d      (never --remove-orphans)
 services:
   # Log database, 30 days. Only on the Docker network (no host port).
   loki:
@@ -55,15 +58,15 @@ services:
     depends_on:
       - loki
 
-  # AdGuard Home (Pi) numbers for Prometheus. AdGuard has no login (R-002), so the
-  # user/password below are dummies the exporter insists on. Read-only API calls.
+  # AdGuard Home (Pi) numbers for Prometheus: queries, blocked share, top clients
+  # and domains. Read-only API calls. Credentials of an AdGuard user in
+  # adguard-exporter.env (see adguard-exporter.env.example).
   adguard-exporter:
     image: ghcr.io/henrywhitaker3/adguard-exporter:v1.2.1
     restart: unless-stopped
+    env_file: adguard-exporter.env
     environment:
       ADGUARD_SERVERS: "http://192.168.178.178:8000"
-      ADGUARD_USERNAMES: "none"
-      ADGUARD_PASSWORDS: "none"
       INTERVAL: "60s"
     expose:
       - "9618"

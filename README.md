@@ -14,12 +14,15 @@ documented so the whole thing can be rebuilt from this repository alone.**
 ![Cloudflare](https://img.shields.io/badge/Cloudflare_Tunnel-F38020?style=flat-square&logo=cloudflare&logoColor=white)
 ![Prometheus](https://img.shields.io/badge/Prometheus-E6522C?style=flat-square&logo=prometheus&logoColor=white)
 ![Grafana](https://img.shields.io/badge/Grafana-F46800?style=flat-square&logo=grafana&logoColor=white)
+![Loki](https://img.shields.io/badge/Grafana_Loki-F46800?style=flat-square&logo=grafana&logoColor=white)
+![CrowdSec](https://img.shields.io/badge/CrowdSec-1E1E3F?style=flat-square)
+![Telegram](https://img.shields.io/badge/Alerts-Telegram-26A5E4?style=flat-square&logo=telegram&logoColor=white)
 ![Nginx](https://img.shields.io/badge/Nginx_Proxy_Manager-009639?style=flat-square&logo=nginx&logoColor=white)
 
 **3 nodes · 12 CPU cores · 64 GB RAM · 6 LXC guests + 1 VM · 2 networks · 16 proxied hostnames · 33 W**
 
 [Architecture](#architecture) · [Hardware](#the-hardware) ·
-[Services](#services) · [Wiki](docs/) · [Runbooks](runbooks/) ·
+[Services](#services) · [Monitoring](#monitoring) · [Wiki](docs/) · [Runbooks](runbooks/) ·
 [Limitations](#known-limitations)
 
 </div>
@@ -33,11 +36,11 @@ The design goal is that the lab could be rebuilt from this repository alone.
 
 | | Contents |
 |---|---|
-| **[`docs/`](docs/)** | A 22-page technical reference: Docker, Docker Compose, LXC versus VM, Proxmox, storage and thin provisioning, networking, DNS and TLS, backup and recovery, monitoring, Linux administration, troubleshooting, hardening, and a nine-page sequence on network segmentation, bridges, NAT, firewalls, OPNsense and FreeBSD. |
+| **[`docs/`](docs/)** | A 25-page technical reference: Docker, Docker Compose, LXC versus VM, Proxmox, storage and thin provisioning, networking, DNS and TLS, backup and recovery, Linux administration, troubleshooting, hardening, a nine-page sequence on network segmentation, bridges, NAT, firewalls, OPNsense and FreeBSD, and a four-page sequence on monitoring, security logs, alerting and dashboards as code. |
 | **[`docs/reports/`](docs/reports/)** | Dated write-ups of changes large enough to have a story, including what broke. |
-| **[`runbooks/`](runbooks/)** | 18 step-by-step procedures, each with prerequisites, verification and rollback: creating containers, deploying services, cluster operations, building and sealing the DMZ, backup restore drills and full disaster recovery. |
-| **[`compose/`](compose/)** | 11 Docker Compose stacks covering every containerised service, published as templates with credentials externalised. |
-| **[`scripts/`](scripts/)** | Operational tooling: container provisioning, Docker installation, backup automation, health checking, and a secret scanner that runs pre-commit and in CI. |
+| **[`runbooks/`](runbooks/)** | 24 step-by-step procedures, each with prerequisites, verification and rollback: creating containers, deploying services, cluster operations, building and sealing the DMZ, monitoring every machine, collecting logs, alerting to Telegram, backup restore drills and full disaster recovery. |
+| **[`compose/`](compose/)** | 14 Docker Compose stacks covering every containerised service, published as templates with credentials externalised, including the full monitoring, logging and alerting configuration. |
+| **[`scripts/`](scripts/)** | Operational tooling: container provisioning, Docker installation, backup automation, health checking, a secret scanner that runs pre-commit and in CI, and the generators and checker for the Grafana dashboards and alert rules. |
 | **[`diagrams/`](diagrams/)** | The full architecture diagram, with editable draw.io source. |
 | **[`inventory/`](inventory/inventory.yml)** | A machine-readable inventory of every host, guest, service and address — the single source of truth from which the tables in this README are derived. |
 
@@ -259,6 +262,8 @@ the lab.
 | Portainer 1 | 9443 | `port1.` | LAN |
 | Grafana | 3000 | `grafana.` | LAN |
 | Prometheus | 9090 | `prom.` | LAN |
+| Loki, Alloy, CrowdSec | 1514/udp (firewall log in) | — | LAN / Docker network |
+| pve-, fritz-, game-, adguard-exporter | — | — | Docker network only |
 | n8n | — | — | LAN |
 | pure-ftpd | — | — | LAN |
 | Apache | 80 | `apache.` | **internet, via tunnel** |
@@ -331,38 +336,62 @@ table on this page is [`inventory/inventory.yml`](inventory/inventory.yml).
 
 ## Monitoring
 
-![Grafana Node Exporter Full dashboard for P1, seven days of history](assets/screenshots/grafana-node-exporter-p1.png)
+Every machine, the internet line and the game servers are watched; the firewall
+and the website are logged with the visitor's location; and the lab **tells me
+when something breaks**, on Telegram. Built in October 2026; the story,
+including the sixteen things that broke on the way, is in
+[the October report](docs/reports/2026-10-08-monitoring-security-alerting.md).
 
-*Node Exporter Full (dashboard 1860) on P1: 25.6% CPU, 27.7% of 31 GiB RAM,
-45.2% of the 94 GiB root filesystem, seven days of history. The per-interface
-network panel shows `veth101i0` through `veth107i0` — one virtual interface per
-LXC guest — and `docker0`, which is the containers inside LXC 102.*
+```mermaid
+flowchart LR
+    A["node_exporter<br/>3 nodes · Pi · NAS"] --> P[("Prometheus")]
+    B["Proxmox API · FRITZ!Box<br/>game panels · AdGuard"] -- "exporters" --> P
+    C["firewall log · SSH ·<br/>containers · website"] -- "Alloy + GeoIP" --> L[("Loki")]
+    L --> CS["CrowdSec<br/>watch only"] --> P
+    P --> G["Grafana<br/>4 dashboards · 19 alert rules"]
+    L --> G
+    G -- "alerts" --> T["Telegram"]
+```
 
-![Grafana hardware temperature panel: nvme and coretemp, seven days](assets/screenshots/grafana-temperatures.png)
-
-*The same dashboard, further down: NVMe and per-core package temperatures over
-the same week. Mean 39-44 °C, peaks to 64 °C, against an 80 °C line. Three
-fanless mini PCs stacked in a rack is exactly the arrangement where you want
-this graph to exist rather than to assume.*
-
-![Prometheus target health: two scrape pools, both up](assets/screenshots/prometheus-targets.png)
-
-*Prometheus target health at the time of the screenshot: two scrape pools, both
-up — Prometheus itself and `node_exporter` on P1. Since then all three nodes are
-scraped, plus the Proxmox API exporter (every node, VM, LXC and storage, through
-a read-only token), the Raspberry Pi and the NAS. cAdvisor is written into
-[`prometheus.yml`](compose/monitoring/prometheus.yml) and is not yet deployed —
-it is marked as such in the file and listed as a gap below.*
+| What | How |
+|---|---|
+| **Machines** | node_exporter on all three nodes, the Pi and the NAS: CPU, RAM, disks, network, every temperature sensor |
+| **Cluster** | pve-exporter with a read-only (`PVEAuditor`) token: every node, VM, LXC and storage, backup status |
+| **Internet line** | the FRITZ!Box over TR-064, with a router user that has one right: link, DSL speed and quality, new devices, remote access, firmware |
+| **Game servers** | a 158-line read-only exporter for AMP and Pterodactyl: state, players, load, uptime |
+| **Logs** | Loki + Alloy: SSH, every container, the OPNsense firewall log and the website (with the real visitor IP behind the tunnel), each with country and city |
+| **Attacks** | CrowdSec reads those logs and recognises brute force, scans and web exploits, **watch only**: nothing is blocked |
+| **Dashboards** | four, generated by a Python script: Overview, Hosts (a switch per machine), Games, Security (dark world map) |
+| **Alerts** | 19 rules to my own Telegram bot: 🔴 any time, 🟠 not at night, 🎮 when a game server stops. Switched-off nodes are not an incident |
 
 Prometheus **pulls**: it reaches out to each target on an interval, so adding a
 host means editing `prometheus.yml` and installing an exporter, and never
-configuring the new host to know about Prometheus. Retention is 90 days, because
-the default 15 is too short to see a slow leak.
+configuring the new host to know about Prometheus. Everything Grafana knows
+(data sources, dashboards, alert rules, Telegram, quiet hours) comes from files,
+so a rebuilt Grafana needs no clicking.
 
-The full stack, the PromQL queries in active use, and the outstanding gap —
-**no alerting** — are documented in [`docs/08-monitoring.md`](docs/08-monitoring.md). The scrape
-configuration is
-[`compose/monitoring/prometheus.yml`](compose/monitoring/prometheus.yml).
+| Read | for |
+|---|---|
+| [docs/08 · Monitoring](docs/08-monitoring.md) | the stack, Prometheus, PromQL, what is and is not monitored |
+| [docs/23 · Logs and security monitoring](docs/23-logs-and-security-monitoring.md) | Loki, Alloy, the firewall log, GeoIP, CrowdSec |
+| [docs/24 · Alerting](docs/24-alerting.md) | the rules, routing, quiet hours, and seven ways an alert can lie |
+| [docs/25 · Dashboards as code](docs/25-dashboards-as-code.md) | why generated, and the Grafana traps |
+| [runbooks 10, 21-26](runbooks/) | how to build all of it, step by step |
+
+![Grafana Node Exporter Full dashboard for P1, seven days of history](assets/screenshots/grafana-node-exporter-p1.png)
+
+*Where it started: the community dashboard 1860 on P1 (25.6% CPU, 27.7% of
+31 GiB RAM, seven days). The per-interface network panel shows `veth101i0`
+through `veth107i0`, one virtual interface per LXC guest, and `docker0`, the
+containers inside LXC 102. It has since been replaced by the lab's own
+generated dashboards.*
+
+![Grafana hardware temperature panel: nvme and coretemp, seven days](assets/screenshots/grafana-temperatures.png)
+
+*NVMe and per-core package temperatures over a week: mean 39-44 °C, peaks to
+64 °C, against an 80 °C line. Three fanless mini PCs stacked in a rack is
+exactly the arrangement where you want this graph to exist rather than to
+assume, and there is now an alert above 85 °C.*
 
 ---
 
@@ -399,12 +428,15 @@ asked for.
 | 05 | [Networking, DNS and TLS](docs/05-networking-dns-tls.md) | the request path, DNS-01, proxy headers, diagnostic order |
 | 06 | [Storage](docs/06-storage.md) | thin provisioning, UID mapping, why RAID is not a backup |
 | 07 | [Backup and recovery](docs/07-backup-and-recovery.md) | `vzdump` modes, restoring, and the drill nobody runs |
-| 08 | [Monitoring](docs/08-monitoring.md) | the stack, the PromQL that gets used, and the alerting gap |
+| 08 | [Monitoring](docs/08-monitoring.md) | the stack in one picture, Prometheus, the PromQL that gets used, what is monitored |
 | 09 | [Linux administration](docs/09-linux-admin.md) | systemd, journald, disks, network, SSH, permissions |
 | 10 | [Troubleshooting](docs/10-troubleshooting.md) | organised by **symptom**, because that is what you have |
 | 11 | [Hardening](docs/11-hardening.md) | the threat model, what is done, what deliberately is not |
 | 21 | [Encrypted DNS](docs/21-encrypted-dns.md) | DoH vs DoT, who encrypts what, and what it still does not hide |
 | 22 | [VPNs and kill switches](docs/22-vpns-and-kill-switches.md) | where a VPN can live in this network, and why torrents go through gluetun |
+| 23 | [Logs and security monitoring](docs/23-logs-and-security-monitoring.md) | Loki, Alloy, the firewall log, GeoIP, CrowdSec watch-only, no country blocking |
+| 24 | [Alerting](docs/24-alerting.md) | Grafana rules to Telegram, quiet hours, and seven ways an alert can lie |
+| 25 | [Dashboards as code](docs/25-dashboards-as-code.md) | generated Grafana dashboards, and the Grafana traps |
 | 99 | [Security notes](docs/99-security-notes.md) | what this repository publishes, and what it never will |
 
 ### The runbooks — [`runbooks/`](runbooks/)
@@ -422,9 +454,15 @@ asked for.
 | 07 | [Nextcloud](runbooks/07-nextcloud.md) — *planned, not yet deployed* | 60 min |
 | 08 | [Add a node to the Proxmox cluster](runbooks/08-add-a-node-to-the-cluster.md) | 15 min |
 | 09 | [The backup restore drill](runbooks/09-backup-restore-drill.md) — quarterly | 30 min |
-| 10 | [Prometheus, Grafana and the exporters](runbooks/10-monitoring-stack.md) | 45 min |
+| 10 | [Prometheus, Grafana and the exporters](runbooks/10-monitoring-stack.md) | 60-90 min |
 | 11 | [Rebuild the lab from zero](runbooks/11-rebuild-from-zero.md) | a weekend |
 | 20 | [qBittorrent behind gluetun on the NAS](runbooks/20-qbittorrent-behind-gluetun.md) | 30 min |
+| 21 | [Logs: Loki, Alloy, the firewall log and CrowdSec](runbooks/21-logs-and-crowdsec.md) | 45-60 min |
+| 22 | [The real visitor IP behind a Cloudflare tunnel](runbooks/22-real-visitor-ip-behind-a-tunnel.md) | 15 min |
+| 23 | [Alerts to Telegram](runbooks/23-alerts-to-telegram.md) | 30 min |
+| 24 | [FRITZ!Box monitoring](runbooks/24-fritzbox-monitoring.md) | 15 min |
+| 25 | [Game server monitoring](runbooks/25-game-server-monitoring.md) | 30 min |
+| 26 | [Test dashboard and alert changes safely](runbooks/26-test-grafana-changes-safely.md) | 5-15 min |
 
 **Start with [Runbook 02](runbooks/02-portainer-on-a-new-lxc.md)** if you read
 one thing. It goes from an empty Proxmox node to a service in a browser with a
@@ -447,19 +485,26 @@ docs/                        the wiki: what things are and why
   12-network-segmentation.md   why a flat network cannot be fixed with rules
   13 .. 20                     addressing, bridges, NAT, firewalls, OPNsense, FreeBSD
   21, 22                       encrypted DNS, VPNs and kill switches
+  08, 23 .. 25                 monitoring, security logs, alerting, dashboards as code
   reports/                     dated write-ups of large changes, including what broke
 runbooks/                    step-by-step procedures
   12 .. 18                     build the DMZ, seal it, and recover it
+  10, 21 .. 26                 monitoring, logs, alerts, router, game servers, testing
 compose/
   <service>/
     docker-compose.example.yml
     .env.example             the real .env is gitignored
+  monitoring/                Prometheus, Grafana, exporters; grafana/provisioning holds
+                             data sources, dashboard provider and all alerting
+  security/                  Loki, Alloy, CrowdSec, adguard-exporter
 scripts/
   check-secrets.sh           pre-commit guard against leaking anything private
   new-lxc.sh                 create a container consistently
   install-docker.sh          Docker + Compose plugin, with log rotation
   backup-all.sh              vzdump wrapper with retention
   health-check.sh            is everything in the inventory answering
+  grafana/                   dashboard + alert-rule generators, and a checker that
+                             runs every query against the live data
 assets/
   photos/  screenshots/
 ```
@@ -477,7 +522,9 @@ Marked with a dashed border in the diagram. None of this is running yet.
 | **Jenkins** | P2 | CI/CD for other repositories |
 | **OpenStack** | P3 | private cloud lab |
 | **Apache CloudStack** | P3 | IaaS orchestration lab |
-| **Alertmanager** | LXC 102 | no automated notification exists today |
+| **Login logs from every machine** | nodes, Pi, NAS | only LXC 102's SSH log is collected; a Proxmox web-UI brute force would go unseen |
+| **CrowdSec bouncer** | OPNsense or the proxy | after weeks of watch-only data show how often a ban would be wrong |
+| **cAdvisor** | LXC 102 | per-container CPU and RAM |
 | **VPN lane** | OPNsense + Omada switch | WireGuard to Mullvad on OPNsense and a VLAN whose traffic can only leave through it, so chosen devices get a VPN without an app |
 | **Egress filtering** | OPNsense | the game segment can currently reach anything outbound |
 | **A subnet per service** | OPNsense | wings, AMP and the panel are currently neighbours |
@@ -509,12 +556,20 @@ cost and no friction for players. The reasoning is in
 Documented deliberately. A system's weak points are operational knowledge, and
 a repository that lists only strengths is not documentation.
 
-- **No alerting.** Prometheus collects and Grafana visualises; nothing issues a
-  notification when a service fails. Failures are detected by inspection. This
-  is the largest gap in the system.
-- **The containers are not scraped.** All three Proxmox nodes, the Proxmox API,
-  the Raspberry Pi and the NAS are monitored. `prometheus.yml` also describes
-  cAdvisor in LXC 102; it is not deployed yet.
+- **Alerts depend on the things they watch.** Grafana and Prometheus run in
+  LXC 102 on P1, and the messages leave through the same internet line. If P1
+  dies, nothing says so; if the internet is down, the alert arrives when it is
+  back. A tiny external "is it alive" check would close the first gap.
+- **Logins are only collected from LXC 102.** SSH and web-UI logins on the
+  Proxmox nodes, the Pi and the NAS are not in Loki.
+- **The containers are not scraped individually.** All three Proxmox nodes, the
+  Proxmox API, the Raspberry Pi, the NAS, the router and the game servers are
+  monitored; cAdvisor for per-container numbers in LXC 102 is not deployed.
+- **Prometheus keeps 15 days**, its default. The compose example sets 90; the lab
+  has not been switched yet. The location database for the logs is refreshed by
+  hand, monthly.
+- **The game-server alert cannot tell "I stopped it" from "it crashed".** The
+  panels' activity logs would, but the monitoring user may not read them yet.
 - **The game segment has no internal walls.** wings, AMP and the panel share
   `10.10.10.0/24` and are neighbours on one bridge, so traffic between them
   never reaches the firewall. Compromise a game server and you can reach the

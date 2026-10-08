@@ -1,0 +1,16 @@
+# Short Telegram message: one line per problem, plus a "resolved" line when it's fixed.
+apiVersion: 1
+templates:
+  - orgId: 1
+    name: homelab
+    template: |
+      {{ define "homelab.message" -}}
+      {{ range .Alerts.Firing -}}
+      {{ if eq .Labels.severity "critical" }}🔴{{ else if eq .Labels.severity "game" }}🎮{{ else }}🟠{{ end }} <b>{{ .Annotations.summary }}</b>
+      {{ .Annotations.description }}
+      {{ end -}}
+      {{ range .Alerts.Resolved -}}
+      ✅ <b>OK again:</b> {{ .Annotations.summary }}
+      {{ end -}}
+      <a href="https://grafana.example.com/d/homelab-overview">Open Grafana</a>
+      {{- end }}

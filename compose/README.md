@@ -52,7 +52,10 @@ somebody else's network.
 | [`portainer/`](portainer/) | LXC 102, Raspberry Pi | LAN |
 | [`glance/`](glance/) | LXC 102 | LAN |
 | [`vaultwarden/`](vaultwarden/) | LXC 102 | LAN |
-| [`monitoring/`](monitoring/) | LXC 102 | LAN |
+| [`monitoring/`](monitoring/) | LXC 102 | LAN (Prometheus, Grafana, exporters, all alerting) |
+| [`security/`](security/) | LXC 102 | LAN (Loki, Alloy, CrowdSec, adguard-exporter; UDP 1514 for the firewall log) |
+| [`node-exporter/`](node-exporter/) | Raspberry Pi (NAS: same image, made in the UGOS UI) | LAN |
+| [`wud/`](wud/) | LXC 102, Raspberry Pi, NAS | LAN |
 | [`cloudflared/`](cloudflared/) | LXC 102 | outbound only |
 | [`apache/`](apache/) | LXC 102 | **internet, via tunnel** |
 | [`nginx-proxy-manager/`](nginx-proxy-manager/) | Raspberry Pi | LAN |

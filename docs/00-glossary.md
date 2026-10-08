@@ -16,6 +16,8 @@ API access to your DNS). This lab uses DNS-01, which is why no port is open.
 which gives network-wide ad blocking with no client configuration and makes it
 the most load-bearing container in the lab.
 
+**Alert rule (Grafana)** — one or more queries, a condition and a `for:` duration. Every series the query returns is a separate alert (one per node, one per disk). → [Alerting](24-alerting.md)
+
 **Alias (firewall)** — a name for a host, network or port group in OPNsense,
 referenced by rules. Change the alias once and every rule that uses it follows.
 → [Firewalls and `pf`](16-firewalls-and-pf.md)
@@ -29,6 +31,8 @@ accept. Empty means wings trusts only the panel URL it already knows and answers
 the tunnel. `0.0.0.0/0` means everything, which is what turns a tunnel into a
 full VPN. → [VPNs and kill switches](22-vpns-and-kill-switches.md)
 
+**Alloy** — Grafana's collector. Here it reads the systemd journal and the OPNsense syslog, splits lines into fields, adds a location, and sends them to Loki. → [Logs and security monitoring](23-logs-and-security-monitoring.md)
+
 **Bind mount** — a host directory or file mounted into a container at a chosen
 path. Contrast with a *named volume*. Rule used here: bind mounts for
 configuration, named volumes for state.
@@ -38,9 +42,13 @@ such as an RFC1918 address arriving on a WAN interface. OPNsense blocks bogons
 by default, which locks you out when the "WAN" side faces your own house.
 → [OPNsense concepts](17-opnsense-concepts.md)
 
+**`bool` (PromQL)** — turns a comparison from a *filter* into a 0/1 answer. `x > bool 0.9` is always a number; `x > 0.9` returns nothing when false. Every alert rule here uses it. → [Alerting](24-alerting.md#the-traps)
+
 **Bootstrap DNS**: the plain resolver AdGuard uses only to find the IP of an
 encrypted upstream like `dns.quad9.net`. Safe, because the TLS certificate is
 checked right after. → [Encrypted DNS](21-encrypted-dns.md)
+
+**Bouncer (CrowdSec)** — the part that *enforces* CrowdSec's decisions (in a firewall, proxy or web server). None is installed here, so CrowdSec only watches. → [Logs and security monitoring](23-logs-and-security-monitoring.md#crowdsec-watch-only)
 
 **Bridge (`vmbr0`)** — a virtual switch on the Proxmox host. Guests attach to it
 and appear on the physical LAN as if they had their own network card. `vmbr1` is the same thing created with
@@ -55,6 +63,8 @@ rule can be deleted by mistake; an absent cable cannot.
 **Capabilities** — root's powers, split into about forty separate flags
 (`NET_BIND_SERVICE`, `SYS_ADMIN`, …). Containers run with most of them dropped,
 which is why "root in a container" is much weaker than root on the host.
+
+**Cardinality** — the number of distinct label combinations (time series in Prometheus, streams in Loki). A label with unbounded values, such as a visitor IP, explodes it. → [Monitoring](08-monitoring.md#the-data-model)
 
 **cgroups** — the kernel feature that limits **how much** a process can use: CPU,
 memory, I/O. Namespaces control what it can *see*; cgroups control what it can
@@ -71,6 +81,8 @@ plaintext, which is the trade.
 names under that domain go to a specific server instead of the normal upstream.
 Keeps router hostnames working and inside the house.
 
+**Contact point** — *where* Grafana sends a notification: here, two Telegram receivers on the same bot. → [Alerting](24-alerting.md)
+
 **Corosync** — the messaging layer Proxmox clustering runs on. It carries the
 votes that decide quorum. Sensitive to latency and to clock drift; when the
 cluster misbehaves, corosync is usually why.
@@ -79,6 +91,8 @@ cluster misbehaves, corosync is usually why.
 the exact state of an instant. Equivalent to pulling the power cable at that
 moment. Journalling filesystems and databases usually recover; applications that
 buffer in memory may not.
+
+**CrowdSec** — reads logs, matches attack patterns (scenarios) and writes decisions. Runs here in watch-only mode. → [Logs and security monitoring](23-logs-and-security-monitoring.md)
 
 **Destination NAT (DNAT)** — rewriting where an incoming packet is going. A port
 forward. The only mechanism that lets an outsider *start* a conversation with
@@ -119,9 +133,17 @@ desired result. → [the migration report](reports/2026-08-13-dmz-migration.md)
 Usually a container cap that disagrees with an application-level limit inside it.
 → [LXC migration and resources](19-lxc-migration-and-resources.md)
 
+**Exporter** — a small program that asks something (a machine, an API, a router) and prints the answer in Prometheus's text format for Prometheus to scrape. → [Monitoring](08-monitoring.md)
+
+**`filterlog`** — OPNsense's packet-filter log: one CSV line per logged packet (rule, interface, action, direction, protocol, addresses, ports). → [Logs and security monitoring](23-logs-and-security-monitoring.md)
+
 **FreeBSD** — a Unix operating system with its own kernel, not a Linux
 distribution. OPNsense runs on it, which is why OPNsense cannot be an LXC
 container on a Linux host. → [FreeBSD basics](18-freebsd-basics.md)
+
+**GeoIP** — looking up the approximate country and city of an IP address in a local database. Here: DB-IP Lite, refreshed monthly. A "city" of a cloud server is its data centre. → [Logs and security monitoring](23-logs-and-security-monitoring.md#locations-geoip)
+
+**Geomap** — Grafana's map panel. Its default tiles need an API key since 2026; the dashboards here use ESRI's free dark tiles. → [Dashboards as code](25-dashboards-as-code.md)
 
 **Glance** — the dashboard at the front of this lab. HTTP health checks and
 bookmarks in a YAML file. Answers "is anything red" in one second, which is why
@@ -140,9 +162,15 @@ container is an image plus one thin writable layer.
 which is why a disk can report "no space left" at 40% full.
 Diagnose with `df -i`.
 
+**journald logging driver** — Docker setting that sends every container's output to the systemd journal, so one collector reads SSH and all containers at once. → [runbook 21](../runbooks/21-logs-and-crowdsec.md)
+
 **Kill switch**: a rule that drops traffic which is not going through the VPN,
 so a dropped tunnel does not silently fall back to the real connection. The
 strongest version is having no other network at all.
+
+**LogQL** — Loki's query language: a label selector, then filters and parsers, optionally wrapped in counting functions. → [Logs and security monitoring](23-logs-and-security-monitoring.md#logql-the-parts-actually-used)
+
+**Loki** — the log database. Indexes only labels, keeps the rest as text and structured metadata, 30 days here. → [Logs and security monitoring](23-logs-and-security-monitoring.md)
 
 **LXC** — a container that holds a **whole Linux userland**, with systemd, apt
 and an IP address. Behaves like a lightweight server. Every guest in this
@@ -151,6 +179,10 @@ cluster is one. → [LXC or VM](04-lxc-vs-vm.md)
 **LVM-thin** — Proxmox's default block storage. Supports snapshots and thin
 provisioning. When the pool fills, **every guest on it goes read-only at once**,
 and `df` inside the guests will not have warned you. → [Storage](06-storage.md)
+
+**`mod_remoteip`** — Apache module that replaces the connecting address with the real client address from a proxy header, if the proxy is trusted. Here: `CF-Connecting-IP` from the Cloudflare tunnel. → [runbook 22](../runbooks/22-real-visitor-ip-behind-a-tunnel.md)
+
+**Mute timing** — a schedule during which Grafana sends no notifications for a route. Here: warnings are quiet 23:00-08:00. → [Alerting](24-alerting.md)
 
 **Named volume** — Docker-managed storage in `/var/lib/docker/volumes/`.
 Survives `docker compose down`. Deleted by `down -v`.
@@ -187,6 +219,8 @@ Prometheus to scrape. One per host.
 on a different physical host and its machine fingerprint changes. Fixed with
 `ampinstmgr reactivate`. → [Game server hosting](20-game-server-hosting.md)
 
+**Notification policy** — Grafana's routing tree: which alert goes to which contact point, grouped how, repeated how often. → [Alerting](24-alerting.md)
+
 **OOM killer** — the kernel picks a process to kill when memory runs out. It
 chooses by size, not by guilt, so the victim is often not the culprit. Found in
 `dmesg -T | grep -i "killed process"`.
@@ -209,6 +243,8 @@ equivalent to root on the host.
 
 **Prometheus** — a time-series database that **pulls**. It scrapes targets on a
 schedule; nothing pushes to it. → [Monitoring](08-monitoring.md)
+
+**Provisioning (Grafana)** — configuration loaded from files at start: data sources, dashboards, alert rules, contact points. A rebuilt Grafana needs no clicking. → [Dashboards as code](25-dashboards-as-code.md)
 
 **Proxmox VE** — Debian plus KVM, LXC, a web UI, clustering and backup. The
 hypervisor this lab runs on. → [Proxmox cheat sheet](03-proxmox-cheatsheet.md)
@@ -234,6 +270,8 @@ line, so only the traffic that needs it passes through it. The difference
 between the failed attempt and the working one.
 → [Network segmentation](12-network-segmentation.md)
 
+**Scrape** — one request by Prometheus to a target's `/metrics` page. Prometheus *pulls*; nothing pushes to it. → [Monitoring](08-monitoring.md#prometheus-pulls)
+
 **Snapshot** — a point-in-time copy of a guest's disk. Cheap on LVM-thin and
 ZFS, and it **grows as the guest writes**. A forgotten snapshot is a classic way
 to fill a pool.
@@ -257,9 +295,13 @@ rule in one direction does not undo a block rule in the other.
 answers *am I allowed*. You need both.
 → [NAT and port forwarding](15-nat-and-port-forwarding.md)
 
+**Structured metadata (Loki)** — per-line fields that are stored and filterable but, unlike labels, do not create new streams. Visitor IPs, ports and locations live here. → [Logs and security monitoring](23-logs-and-security-monitoring.md#loki-labels-small-details-in-metadata)
+
 **Thin provisioning** — allocating more storage than exists, on the assumption
 that guests will not all use their full allocation. Efficient, and it fails
 abruptly. → [Storage](06-storage.md)
+
+**TR-064** — the FRITZ!Box's API for applications (port 49000, LAN only). The fritz-exporter reads it with a router user that has one right. → [runbook 24](../runbooks/24-fritzbox-monitoring.md)
 
 **TTL** — how long a DNS answer may be cached. Lower it *before* planning a
 change, not after.
