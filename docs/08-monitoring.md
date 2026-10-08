@@ -57,10 +57,10 @@ scrape pools, both UP, last scrape about a minute ago, 5 ms and 103 ms. The
 `instance` and `job` labels shown here are attached to every metric the target
 produces, which is what makes `up == 0` per-instance possible at all.*
 
-*It is also an honest picture of the coverage: **one node is scraped, not
-three.** The exporters for P2, P3 and the Pi are written into `prometheus.yml`
-and commented out, because a target that is configured and not installed shows
-DOWN forever and teaches you to ignore DOWN.*
+*The screenshot shows the coverage before P2, P3 and pve-exporter were added.
+Today all three nodes and the Proxmox API are scraped. The Pi and cAdvisor are
+still only a plan in `prometheus.yml`, because a target that is configured and
+not installed shows DOWN forever and teaches you to ignore DOWN.*
 
 Short-lived jobs that finish before a scrape are the case pull handles badly.
 Pushgateway exists for that; nothing here needs it.

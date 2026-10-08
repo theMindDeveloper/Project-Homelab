@@ -26,8 +26,8 @@ rule_files:
 scrape_configs:
 
   # ---------------------------------------------------------------------
-  #  DEPLOYED: these two are live. See
-  #  assets/screenshots/prometheus-targets.png
+  #  DEPLOYED: prometheus, all three Proxmox nodes, and the Proxmox API
+  #  exporter are live.
   # ---------------------------------------------------------------------
 
   - job_name: prometheus
@@ -39,23 +39,35 @@ scrape_configs:
   #   apt install prometheus-node-exporter
   - job_name: proxmox-host
     static_configs:
+      - targets: ["192.168.178.20:9100"]   # P1
+        labels: {node: pve}
+      - targets: ["192.168.178.77:9100"]   # P2
+        labels: {node: pve2}
+      - targets: ["192.168.178.50:9100"]   # P3
+        labels: {node: pve3}
+
+  # --- Proxmox cluster metrics via the API --------------------------------
+  # prometheus-pve-exporter runs as a container next to Prometheus, with an
+  # API token that has only PVEAuditor (read-only). The token lives in the
+  # exporter's env file (chmod 600), never here.
+  - job_name: proxmox-api
+    metrics_path: /pve
+    params:
+      module: [default]
+      cluster: ["1"]
+      node: ["1"]
+    static_configs:
       - targets:
-          - "192.168.178.20:9100"   # P1 - live
-        # - "192.168.178.50:9100"   # P2 - exporter not installed yet
-        # - "192.168.178.77:9100"   # P3 - exporter not installed yet
+          - "192.168.178.20"
+          - "192.168.178.77"
+          - "192.168.178.50"
     relabel_configs:
       - source_labels: [__address__]
-        regex: "192.168.178.20:.*"
-        target_label: node
-        replacement: pve
-      - source_labels: [__address__]
-        regex: "192.168.178.50:.*"
-        target_label: node
-        replacement: pve2
-      - source_labels: [__address__]
-        regex: "192.168.178.77:.*"
-        target_label: node
-        replacement: pve3
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: "pve-exporter:9221"   # service name on the compose network
 
   # ---------------------------------------------------------------------
   #  NOT YET DEPLOYED. The exporters below are not installed, so these
@@ -63,8 +75,8 @@ scrape_configs:
   #  is listed in the README's known limitations rather than hidden by a
   #  config file that looks complete.
   #
-  #  To deploy: apt install prometheus-node-exporter on P2 and P3, and on
-  #  the Pi, then uncomment. Runbook 10 has the full procedure.
+  #  To deploy: install node_exporter on the Pi and cAdvisor in LXC 102.
+  #  Runbook 10 has the full procedure.
   # ---------------------------------------------------------------------
 
   # --- the Docker LXC and the Pi ------------------------------------------
@@ -78,25 +90,3 @@ scrape_configs:
     static_configs:
       - targets:
           - "192.168.178.87:8085"    # cAdvisor in LXC 102
-
-  # --- Proxmox cluster metrics via the API --------------------------------
-  # Requires prometheus-pve-exporter and an API token with PVEAuditor.
-  # The token lives in the exporter's config file, never here.
-  - job_name: proxmox-api
-    metrics_path: /pve
-    params:
-      module: [default]
-      cluster: ["1"]
-      node: ["1"]
-    static_configs:
-      - targets:
-          - "192.168.178.20"
-          - "192.168.178.50"
-          - "192.168.178.77"
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: __param_target
-      - source_labels: [__param_target]
-        target_label: instance
-      - target_label: __address__
-        replacement: "192.168.178.87:9221"   # pve-exporter
