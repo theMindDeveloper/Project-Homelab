@@ -37,11 +37,11 @@ Not everything. Deciding this is most of the work.
 | Data | Recoverable without a backup? | Priority |
 |---|---|---|
 | **Vaultwarden vault** | never | critical |
-| **Immich photo library** | never | critical |
+| **Photo library** (UGOS Photos) | never | critical |
 | **Nextcloud user data** | never | critical |
 | **Proxmox `/etc/pve`** | rebuildable, slowly, from memory | high |
 | **Container configs and compose files** | in this git repository | low |
-| **Databases** (Pterodactyl, Nextcloud, Immich) | no | high |
+| **Databases** (Pterodactyl, Nextcloud) | no | high |
 | **Media library** | re-obtainable, at cost | medium |
 | **Docker images** | `docker pull` | none |
 | **OS filesystems** | rebuild from the runbooks | low |

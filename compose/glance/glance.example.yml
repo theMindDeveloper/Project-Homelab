@@ -165,16 +165,13 @@ pages:
                 check-url: http://192.168.178.60/
                 icon: "si:opnsense"
 
-          # NAS services. Immich and Syncthing default ports are used below -
+          # NAS services. Syncthing default port is used below -
           # confirm against your actual container port mappings and adjust.
+          # Photos live in UGOS's own photo app (no Immich).
           - type: monitor
             title: NAS
             cache: 1m
             sites:
-              - title: "Immich"
-                url: http://192.168.178.79:2283
-                check-url: http://192.168.178.79:2283/api/server/ping
-                icon: "si:immich"
               - title: "Syncthing"
                 url: http://192.168.178.79:8384
                 check-url: http://192.168.178.79:8384/rest/noauth/health
@@ -274,9 +271,6 @@ pages:
                     url: http://192.168.178.87:5678
               - title: NAS
                 links:
-                  - title: Immich
-                    description: 192.168.178.79:2283
-                    url: http://192.168.178.79:2283
                   - title: Syncthing
                     description: 192.168.178.79:8384
                     url: http://192.168.178.79:8384
