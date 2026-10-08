@@ -1,6 +1,6 @@
 // Grafana Alloy = the log collector. It reads two things and sends them to Loki:
 //   1. the systemd journal of LXC 102 (sshd + every Docker container, because
-//      Docker's log driver here is "journald")
+//      Docker's log driver here is "journald"); Apache lines get visitor IP + location
 //   2. the OPNsense firewall log (filterlog), sent by OPNsense as syslog to UDP 1514
 // Labels stay few and boring (unit, container, host, action, proto ...).
 // Per-connection details (IPs, ports, country, city) go into structured metadata.
@@ -44,7 +44,47 @@ loki.source.journal "lxc102" {
 	max_age       = "12h"
 	relabel_rules = loki.relabel.journal.rules
 	labels        = {host = "lxc102", source = "journal"}
-	forward_to    = [loki.write.local.receiver]
+	forward_to    = [loki.process.journal.receiver]
+}
+
+// Apache (public website via Cloudflare tunnel, container "apache"): pull the visitor IP, request and status
+// out of the "combined" log line and look up where the visitor is. Other lines pass through untouched.
+loki.process "journal" {
+	forward_to = [loki.write.local.receiver]
+
+	stage.match {
+		selector = "{container=\"apache\"}"
+
+		// <ip> - - [<date>] "GET /path HTTP/1.1" 200 1593 "referer" "user agent"
+		stage.regex {
+			expression = "^(?P<src_ip>\\S+) \\S+ \\S+ \\[[^\\]]+\\] \"(?P<method>[A-Z]+) (?P<path>\\S+)[^\"]*\" (?P<status>\\d{3}) \\S+(?: \"[^\"]*\" \"(?P<user_agent>[^\"]*)\")?"
+		}
+
+		stage.geoip {
+			source  = "src_ip"
+			db      = "/geoip/dbip-city-lite.mmdb"
+			db_type = "city"
+		}
+
+		stage.static_labels {
+			values = {job = "apache"}
+		}
+
+		stage.structured_metadata {
+			values = {
+				src_ip      = "",
+				method      = "",
+				path        = "",
+				status      = "",
+				user_agent  = "",
+				country     = "geoip_country_name",
+				country_iso = "geoip_country_code",
+				city        = "geoip_city_name",
+				lat         = "geoip_location_latitude",
+				lon         = "geoip_location_longitude",
+			}
+		}
+	}
 }
 
 // ---------------------------------------------------------------- 2. OPNsense filterlog
