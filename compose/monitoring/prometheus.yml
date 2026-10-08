@@ -26,8 +26,8 @@ rule_files:
 scrape_configs:
 
   # ---------------------------------------------------------------------
-  #  DEPLOYED: prometheus, all three Proxmox nodes, and the Proxmox API
-  #  exporter are live.
+  #  DEPLOYED: prometheus, all three Proxmox nodes, the Proxmox API
+  #  exporter, the Raspberry Pi and the NAS are live.
   # ---------------------------------------------------------------------
 
   - job_name: prometheus
@@ -62,6 +62,18 @@ scrape_configs:
         labels: {node: pve2}
       - targets: ["192.168.178.50:9100"]   # P3
         labels: {node: pve3}
+
+  # --- the other always-on boxes: Raspberry Pi and UGREEN NAS -------------
+  # node_exporter in a small Docker container on each (64 MB cap, read-only).
+  # NAS: bridge network, so its network numbers are the container's own;
+  # each HDD volume is visible through one empty read-only folder
+  # (/disks/volume1, /disks/volume3) so disk usage per volume still shows.
+  - job_name: other-hosts
+    static_configs:
+      - targets: ["192.168.178.178:9100"]   # Raspberry Pi
+        labels: {node: pi}
+      - targets: ["192.168.178.79:9100"]    # NAS
+        labels: {node: nas}
 
   # --- Proxmox cluster metrics via the API --------------------------------
   # prometheus-pve-exporter runs as a container next to Prometheus, with an
@@ -109,16 +121,15 @@ scrape_configs:
   #  is listed in the README's known limitations rather than hidden by a
   #  config file that looks complete.
   #
-  #  To deploy: install node_exporter on the Pi and cAdvisor in LXC 102.
+  #  To deploy: install node_exporter and cAdvisor in LXC 102.
   #  Runbook 10 has the full procedure.
   # ---------------------------------------------------------------------
 
-  # --- the Docker LXC and the Pi ------------------------------------------
+  # --- the Docker LXC --------------------------------------------------------
   - job_name: hosts
     static_configs:
       - targets:
           - "192.168.178.87:9100"    # LXC 102
-          - "192.168.178.178:9100"   # Raspberry Pi
 
   - job_name: containers
     static_configs:
