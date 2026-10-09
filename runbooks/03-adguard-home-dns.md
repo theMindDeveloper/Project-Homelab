@@ -77,6 +77,21 @@ container, published as 8000, so the admin UI ends up at
 | Username | not `admin` |
 | Password | generated, stored in Vaultwarden |
 
+The wizard asks for this login, but check it stuck: in
+`conf/AdGuardHome.yaml`, `users:` must not be `[]`. This lab ran without a
+login for months before anyone noticed. While you're in that file, turn on the
+lockout (AdGuard's own defaults; `0` means off):
+
+```yaml
+auth_attempts: 5      # wrong passwords before a lockout
+block_auth_min: 15    # minutes locked out
+```
+
+AdGuard has no read-only role. Anything that reads its API (the
+[exporter](21-logs-and-crowdsec.md), the Glance widget) gets its own user,
+so its password can change without touching yours. Add more users in that
+`users:` list as a name plus a bcrypt hash, with AdGuard stopped.
+
 ### Upstream resolvers
 
 Settings → DNS settings. Updated September 2026, see
@@ -150,6 +165,9 @@ everyone and step 4 did not take effect.*
 dig @192.168.178.178 example.com                 # resolves
 dig @192.168.178.178 doubleclick.net             # expect 0.0.0.0 or NXDOMAIN
 dig @192.168.178.178 grafana.theminddev.com      # expect 192.168.178.178
+
+# the UI must refuse you without a login
+curl -s -o /dev/null -w '%{http_code}\n' http://192.168.178.178:8000/control/status   # expect 401
 ```
 
 Then open the query log in the UI. Every device on the network should be
