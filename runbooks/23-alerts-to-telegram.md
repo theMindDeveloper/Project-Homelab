@@ -71,7 +71,7 @@ In `/opt/monitoring/grafana/provisioning/alerting/`
 | `contact-points.yml` | two Telegram receivers on the same bot: `telegram` (with "OK again" messages) and `telegram-games` (without) | rarely |
 | `policies.yml` | critical and 🎮 → any time; warning → muted 23:00-08:00 Europe/Berlin; group per alert and node; repeat every 4 h | quiet hours, timezone |
 | `templates.yml` | the message: emoji, one bold line, one explanation, a link | to taste |
-| `rules.yml` | the 19 rules. **Generated**, don't edit by hand | via `gen_alerts.py` |
+| `rules.yml` | the 20 rules. **Generated**, don't edit by hand | via `gen_alerts.py` |
 
 ### Adapt the rules to your lab
 
