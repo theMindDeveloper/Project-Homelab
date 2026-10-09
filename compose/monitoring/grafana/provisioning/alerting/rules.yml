@@ -381,6 +381,58 @@
       "interval": "1m",
       "rules": [
         {
+          "uid": "host-off",
+          "title": "Power-saving node off",
+          "condition": "C",
+          "for": "2m",
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "labels": {
+            "severity": "warning"
+          },
+          "annotations": {
+            "summary": "{{ .Labels.node }} is off",
+            "description": "Fine if you switched it off yourself. You get an OK message when it's back."
+          },
+          "isPaused": false,
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 900,
+                "to": 0
+              },
+              "datasourceUid": "prometheus-homelab",
+              "model": {
+                "refId": "A",
+                "expr": "max by (node) (up{job=\"proxmox-host\", node=~\"pve2|pve3\"}) < bool 1",
+                "instant": true,
+                "intervalMs": 60000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
           "uid": "disk-80",
           "title": "Disk over 80%",
           "condition": "C",
@@ -495,7 +547,7 @@
             "severity": "warning"
           },
           "annotations": {
-            "summary": "{{ .Labels.node }} {{ .Labels.mountpoint }} will be full in < 7 days",
+            "summary": "{{ .Labels.node }} {{ .Labels.mountpoint }} will be full within 7 days",
             "description": "Based on the last 6 hours of growth."
           },
           "isPaused": false,

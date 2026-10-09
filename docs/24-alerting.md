@@ -135,6 +135,7 @@ link. Everything else is one tap away in Grafana.
 | 🔴 | Internet down | the FRITZ!Box reports the WAN link down | 3 min |
 | 🟠 | Disk / storage over 80 % | as above, earlier | 30 min |
 | 🟠 | Disk full within 7 days | `predict_linear` over 6 h says < 0 in 7 days | 2 h |
+| 🟠 | Power-saving node off | pve2 or pve3 cannot be scraped ("pve3 is off", then an OK message when it's back) | 2 min |
 | 🟠 | RAM over 90 % | any monitored machine | 15 min |
 | 🟠 | CrowdSec detected an attack | a CrowdSec scenario matched in the last 10 min | 0 |
 | 🟠 | Many failed SSH logins | > 10 in 10 min on LXC 102 (Loki) | 0 |
@@ -202,7 +203,7 @@ into a night of messages:
 
 | Naive rule | Problem | Fix |
 |---|---|---|
-| Host down | fires for pve2/pve3 every evening | not alerted for pve2/pve3 (`node!~"pve2\|pve3"`) |
+| Host down | fires for pve2/pve3 every evening | no 🔴 for pve2/pve3 (`node!~"pve2\|pve3"`); instead a soft 🟠 "Power-saving node off": a warning, so never at night, and "fine if you switched it off yourself" |
 | Guest with autostart stopped | every guest on pve2 counts as "stopped" | `and on (node) (up{job="proxmox-host"} == 1)`: only while its node is up |
 | OPNsense stopped logging | OPNsense lives on pve2 | a two-query rule: Loki count **and** "pve2 is up" |
 
@@ -214,6 +215,15 @@ A (Loki):        sum(count_over_time({job="opnsense"}[30m])) or vector(0)
 B (Prometheus):  max(up{job="proxmox-host", node="pve2"}) or vector(0)
 C (math):        $A < 1 && $B == 1
 ```
+
+### 4b · A "<" in a message text drops the whole message
+
+"Disk full within 7 days" fired, but nothing ever reached Telegram. Its text
+said "will be full in < 7 days". The contact point sends with `parse_mode`
+HTML, so Telegram read `< 7` as a broken HTML tag and rejected the whole
+message (400 "Unsupported start tag"). Grafana only logs that error, every
+5 minutes. The text now says "within 7 days", and `gen_alerts.py` refuses any
+`<` or `&` in alert texts, so this cannot come back.
 
 ### 5 · `$` means three different things
 
