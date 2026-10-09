@@ -30,11 +30,12 @@ query and every alert-rule query against Prometheus and Loki (read-only, GET
 only), tries the Hosts dashboard once per host, and checks that no panels
 overlap.
 
-Loki usually has no published port, so run the check on the Docker network,
-from the folder with this repository:
+Loki usually has no published port, so run the check on the monitoring Docker
+network (`stacks_monitoring` here: compose project `stacks` + network
+`monitoring`), from the folder with this repository:
 
 ```bash
-docker run --rm --network stacks_default -v "$PWD":/w:ro python:3.13-alpine \
+docker run --rm --network stacks_monitoring -v "$PWD":/w:ro python:3.13-alpine \
   python -I /w/scripts/grafana/check_dashboards.py --quiet \
     --prom http://prometheus:9090 --loki http://loki:3100 \
     /w/compose/monitoring/grafana/dashboards/*.json \

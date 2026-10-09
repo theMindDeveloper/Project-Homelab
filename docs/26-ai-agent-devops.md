@@ -86,6 +86,7 @@ flowchart LR
         PT["Pterodactyl<br/>(subuser)"]
         NPM["Nginx Proxy Manager<br/>(non-admin)"]
         WUD["WUD<br/>(read-only)"]
+        GF["Grafana<br/>(Viewer)"]
         GH["GitHub<br/>(fine-grained token)"]
     end
     subgraph no["NO access"]
@@ -111,6 +112,8 @@ flowchart LR
 | **Pterodactyl** | non-admin user, **subuser** on the game servers; client API key limited to VM 103's address | start/stop, console, files, backups of those servers | the panel's admin area (verified: HTTP 403) |
 | **Nginx Proxy Manager** | own non-admin user | manage proxy hosts and redirects, view certificates | users, settings, certificate private keys |
 | **WUD** (image update checker) | read-only tokens | read | anything else |
+| **Grafana** | a **service account with the Viewer role** and its token (added 9 October 2026 for the weekly report) | read dashboards, alert states and the alert history | change anything: dashboards, rules, users (verified: a write attempt gets HTTP 403) |
+| **Prometheus, Loki** | plain HTTP inside the LAN (Loki through `docker exec` on LXC 102) | run queries | nothing; both are read-only for queries |
 | **GitHub** | fine-grained token on the owner's account | branches and pull requests on the owner's repositories (technically also push to `main` and merge) | change repository settings (GitHub refuses: 403). Merging and pushing to `main` it does not do, by rule; see the weak spots |
 | **Monitoring logins** | copies of the read-only Proxmox exporter token, the router monitoring user, the alert bot, the game exporter key | apply and repair the monitoring | nothing beyond those (deliberately narrow, see [docs/24](24-alerting.md)) |
 | **OPNsense, NAS, FRITZ!Box admin, Vaultwarden, Cloudflare** | **none** | | changes there are done by the owner, from a click-guide the agent writes |
@@ -187,9 +190,45 @@ The model is paid per use, so the design avoids waking it for nothing:
 | a message from the owner | **alerts**: Grafana sends them straight to a separate Telegram bot ([docs/24](24-alerting.md)) |
 | the merge-watcher, *only* when a PR was merged | the merge-watcher's checks every 2 minutes (a script) |
 | its own heartbeat, if the heartbeat checklist has something on it (empty = skipped) | monitoring, dashboards, logs: all run without it |
+| the **weekly report**, once a week (below) | |
 
 Work that needs no judgement (alerting, collecting metrics) never goes through
 the agent. If the agent is down, the lab and its alerts carry on.
+
+### The weekly report
+
+Once a week (Sunday 18:00) an automation starts the agent in a fresh, isolated
+session that may only read files, write one temporary file and run commands.
+The split is the same as everywhere else: **a script collects, the model
+writes.**
+
+```mermaid
+flowchart LR
+    S["collector script<br/>(read-only)"] --> P["Prometheus<br/>7 days of metrics"]
+    S --> L["Loki<br/>logins, firewall, CrowdSec"]
+    S --> G["Grafana API<br/>alerts fired, firing now"]
+    S --> R["REPORTS.md<br/>open findings"]
+    S -- "plain facts" --> A["agent<br/>writes 3 short parts"]
+    A --> B["monitoring bot<br/>-> owner's Telegram"]
+```
+
+- **The collector** is a Python script with no dependencies. It asks
+  Prometheus for uptime *of the time each machine was monitored* (nodes that are
+  switched off to save power are not "down"), disk growth, CPU/RAM peaks,
+  guests without a backup, the internet line and the game servers; Loki for SSH
+  logins, blocked connections and CrowdSec alerts; Grafana for the alert history; and lists the open findings.
+  It prints plain text and changes nothing.
+- **The agent** turns that into three short parts: overall state, security,
+  suggestions. Suggestions are only suggestions; nothing is changed from a
+  report.
+- **It is sent by the monitoring bot**, the same Telegram bot the alerts come
+  from, so everything about the lab's health arrives in one chat. The agent's
+  own chat bot is only the fallback if that send fails.
+- **Grafana is read with a Viewer token.** Prometheus keeps no history of which
+  alerts fired; Grafana does. The owner created the service account and typed
+  the token on the Docker host (`read -rsp`), the agent moved it to its
+  credentials folder and deleted the copy.
+- **Cost:** one run of about 13 000 tokens and half a minute, once a week.
 
 ---
 

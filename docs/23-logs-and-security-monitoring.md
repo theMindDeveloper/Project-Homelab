@@ -57,6 +57,8 @@ from this lab, the project is called `stacks`):
 ```bash
 docker network inspect stacks_default -f '{{range .Containers}}{{.Name}} {{end}}'
 # -> only the website, the tunnel connector and FTP
+docker network inspect stacks_monitoring -f '{{range .Containers}}{{.Name}} {{end}}'
+# -> Prometheus, Grafana, Loki, Alloy, CrowdSec and the exporters
 docker exec stacks-webserver-1 getent hosts pve-exporter loki
 # -> prints nothing: the website cannot even find them by name
 ```
