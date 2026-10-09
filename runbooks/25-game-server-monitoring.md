@@ -42,6 +42,12 @@ Each time Prometheus asks (every 30 s), it:
 If a panel cannot be reached (its node is switched off), its servers are left
 out: no data, so no alerts.
 
+Both panels are asked at the same time and each request gives up after 4 s.
+So one dead panel (container stopped, node off) only sets its own
+`game_exporter_api_up` to 0; the other panel's servers still show up and the
+`games` target stays UP. Prometheus waits up to 20 s for this job
+(`scrape_timeout: 20s`).
+
 ---
 
 ## 1 · Credentials with as little power as possible
