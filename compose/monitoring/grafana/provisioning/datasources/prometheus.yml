@@ -1,0 +1,10 @@
+# Grafana reads this on start. Adds the local Prometheus as a data source.
+apiVersion: 1
+datasources:
+  - name: Prometheus (homelab)
+    uid: prometheus-homelab
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false

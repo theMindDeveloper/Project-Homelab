@@ -10,11 +10,13 @@ wait_for_ready: 60s
 labels:
   type: sshd
 ---
-# Apache (stacks-webserver-1). Note: visitors via the Cloudflare tunnel show the
-# tunnel's IP, not the real visitor IP, until Apache gets mod_remoteip (phase 2).
+# Apache (container "apache", see compose/apache). Behind the Cloudflare tunnel the
+# real visitor IP only appears in the log because of mod_remoteip (runbook 22);
+# without it every request comes from cloudflared's private Docker IP, which
+# CrowdSec whitelists, and no web scenario can ever fire.
 source: loki
 url: http://loki:3100
-query: '{host="lxc102", container="stacks-webserver-1"}'
+query: '{host="lxc102", container="apache"}'
 wait_for_ready: 60s
 labels:
   type: apache2

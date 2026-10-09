@@ -1,0 +1,132 @@
+# ---------------------------------------------------------------------------
+#  Prometheus scrape configuration - what Prometheus asks, and how often
+#
+#  Prometheus pulls. Every target below must be reachable FROM the Prometheus
+#  container. The most common "target down" cause in a homelab is using
+#  localhost in a target: inside a container that means the container itself,
+#  not the host.
+#
+#  Targets written as "name:port" (pve-exporter:9221) are other containers in
+#  the same compose project, found by their service name. Targets written as
+#  IP:port are machines on the LAN.
+#
+#  After editing: docker kill -s HUP <prometheus container>   (reload, no restart)
+#  Check:         http://<host>:9090/targets  - every line should say UP
+# ---------------------------------------------------------------------------
+
+global:
+  scrape_interval: 15s       # how often to ask each target, unless a job says otherwise
+
+# No Prometheus alerting: the alert rules live in Grafana (they need Loki too).
+# See compose/monitoring/grafana/provisioning/alerting/ and docs/24-alerting.md.
+
+scrape_configs:
+
+  - job_name: prometheus     # Prometheus watching itself
+    static_configs:
+      - targets: ["localhost:9090"]   # the one place localhost is right: it IS this container
+
+  # --- the machines -------------------------------------------------------
+
+  # The three Proxmox nodes. node_exporter is installed ON each node with apt
+  # (apt install prometheus-node-exporter), not in a container, because it
+  # reports on the machine and needs the machine's own /proc and /sys.
+  # The "node" label gives every number a short, human name; dashboards and
+  # alerts use it instead of IP:port.
+  - job_name: proxmox-host
+    static_configs:
+      - targets: ["192.168.178.20:9100"]
+        labels: {node: pve}
+      - targets: ["192.168.178.77:9100"]
+        labels: {node: pve2}
+      - targets: ["192.168.178.50:9100"]
+        labels: {node: pve3}
+
+  # The Raspberry Pi and the NAS: node_exporter in a small read-only container
+  # on each (compose/node-exporter/). The NAS one runs in bridge mode with one
+  # empty read-only folder per disk volume, see runbook 10.
+  - job_name: other-hosts
+    static_configs:
+      - targets: ["192.168.178.178:9100"]
+        labels: {node: pi}
+      - targets: ["192.168.178.79:9100"]
+        labels: {node: nas}
+
+  # --- Proxmox's own view, through the API ---------------------------------
+  # pve-exporter asks the Proxmox API (read-only token, role PVEAuditor) and
+  # reports every node, VM, LXC and storage of the cluster.
+  #
+  # The cluster-wide part is the same no matter which node you ask, so it is
+  # asked from ONE node only. Asking all three stored every number three
+  # times (and dashboards showed every gauge three times).
+  - job_name: pve
+    metrics_path: /pve
+    params:
+      module: [default]
+      cluster: ["1"]     # all nodes, guests and storages
+      node: ["0"]        # but not the per-node extras
+    static_configs:
+      - targets: ["192.168.178.20"]
+    relabel_configs: &pve_relabel
+      # "target" is not where Prometheus connects to; it is a parameter for the
+      # exporter ("please ask THIS Proxmox node"). These three lines turn the
+      # address into ?target=..., keep it as the instance label, and send the
+      # actual request to the exporter container.
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: pve-exporter:9221
+
+  # The per-node extras (start-on-boot flag, replication) do differ per node,
+  # so those are asked from each node.
+  - job_name: pve-node
+    metrics_path: /pve
+    params:
+      module: [default]
+      cluster: ["0"]
+      node: ["1"]
+    static_configs:
+      - targets: ["192.168.178.20", "192.168.178.77", "192.168.178.50"]
+    relabel_configs: *pve_relabel        # same three lines as above (YAML anchor)
+
+  # --- the router ---------------------------------------------------------
+  # FRITZ!Box over TR-064. TR-064 is slow (a scrape takes several seconds), so
+  # once a minute is plenty.
+  - job_name: fritzbox
+    scrape_interval: 60s
+    scrape_timeout: 30s
+    static_configs:
+      - targets: ["fritz-exporter:9787"]
+
+  # --- game servers --------------------------------------------------------
+  # AMP + Pterodactyl, through our own read-only game-exporter.
+  - job_name: games
+    scrape_interval: 30s
+    static_configs:
+      - targets: ["game-exporter:9788"]
+
+  # --- security (compose/security, same compose project) ------------------
+  # CrowdSec: lines read, attacks recognised, "would block" decisions.
+  # Watch only: no bouncer is installed, nothing is ever blocked.
+  - job_name: crowdsec
+    static_configs:
+      - targets: ["crowdsec:6060"]
+
+  # AdGuard Home (DNS) on the Pi, through adguard-exporter.
+  # Per-query histograms are dropped: many series, and no panel uses them.
+  - job_name: adguard
+    scrape_interval: 60s
+    static_configs:
+      - targets: ["adguard-exporter:9618"]
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: "adguard_(processing_time_.*|queries_details_histogram_.*|dhcp_leases)"
+        action: drop
+
+  # --- not deployed --------------------------------------------------------
+  # cAdvisor (per-container CPU/RAM inside LXC 102) is NOT running. It is not
+  # listed here on purpose: a target that is configured but not installed shows
+  # DOWN forever and teaches you to ignore DOWN. It is in the README's known
+  # limitations instead.

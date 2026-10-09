@@ -69,7 +69,7 @@ jobs:
           for f in sorted(glob.glob('**/*.yml', recursive=True) +
                           glob.glob('**/*.yaml', recursive=True)):
               try:
-                  yaml.safe_load(open(f))
+                  list(yaml.safe_load_all(open(f)))   # multi-document files (---) are valid YAML
                   print(f"ok    {f}")
               except Exception as e:
                   bad += 1

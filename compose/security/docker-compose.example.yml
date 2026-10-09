@@ -1,10 +1,14 @@
 # Security monitoring. It only WATCHES and REPORTS. Nothing here blocks traffic
 # (CrowdSec has no bouncer, so its "decisions" are only shown, never enforced).
-# Run with the same project as monitoring.yml so Grafana + Prometheus reach these by name:
-#   docker compose -p stacks -f security.yml up -d      (never --remove-orphans)
+# Folder /opt/security on LXC 102. Runbook: runbooks/21-logs-and-crowdsec.md
+# Concepts: docs/23-logs-and-security-monitoring.md
+# Run with the SAME project name as compose/monitoring, so Grafana and Prometheus
+# reach these containers by name (loki, crowdsec, adguard-exporter):
+#   docker compose -p stacks -f docker-compose.yml up -d      (never --remove-orphans)
 services:
   # Log database, 30 days. Only on the Docker network (no host port).
   loki:
+    networks: [monitoring]   # NOT the default network: see the note at the end
     image: grafana/loki:3.7.8
     restart: unless-stopped
     command: -config.file=/etc/loki/loki.yml
@@ -17,6 +21,7 @@ services:
 
   # Log collector: LXC 102 journal (sshd + all containers) and OPNsense firewall log.
   alloy:
+    networks: [monitoring]   # NOT the default network: see the note at the end
     image: grafana/alloy:v1.20.1
     restart: unless-stopped
     command:
@@ -40,6 +45,7 @@ services:
   # Reads logs from Loki and spots attacks (SSH brute force, web scans, port scans).
   # WATCH ONLY: no bouncer, no online API (nothing is shared with crowdsec.net).
   crowdsec:
+    networks: [monitoring]   # NOT the default network: see the note at the end
     image: crowdsecurity/crowdsec:v1.8.1
     restart: unless-stopped
     environment:
@@ -55,15 +61,16 @@ services:
     depends_on:
       - loki
 
-  # AdGuard Home (Pi) numbers for Prometheus. AdGuard has no login (R-002), so the
-  # user/password below are dummies the exporter insists on. Read-only API calls.
+  # AdGuard Home (Pi) numbers for Prometheus: queries, blocked share, top clients
+  # and domains. Read-only API calls. Credentials of an AdGuard user in
+  # adguard-exporter.env (see adguard-exporter.env.example).
   adguard-exporter:
+    networks: [monitoring]   # NOT the default network: see the note at the end
     image: ghcr.io/henrywhitaker3/adguard-exporter:v1.2.1
     restart: unless-stopped
+    env_file: adguard-exporter.env
     environment:
       ADGUARD_SERVERS: "http://192.168.178.178:8000"
-      ADGUARD_USERNAMES: "none"
-      ADGUARD_PASSWORDS: "none"
       INTERVAL: "60s"
     expose:
       - "9618"
@@ -74,3 +81,10 @@ volumes:
   alloy-data:
   crowdsec-config:
   crowdsec-data:
+
+# Own network for everything that holds a secret or sees all logs. Internet-facing
+# containers (the website, the tunnel connector) must never join it: pve-exporter
+# sends its Proxmox token to whatever host a caller names, and Loki has no login.
+# Both compose files of the project declare it; the second one reuses it.
+networks:
+  monitoring: {}

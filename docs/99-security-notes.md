@@ -111,6 +111,27 @@ If any of those services ever becomes internet-facing, the screenshot comes
 down. The rule is not "publish tags", it is "a version is only sensitive next to
 a reachable address".
 
+### The monitoring added in October 2026 forced two more
+
+**Generated dashboards are not committed.** The Games dashboard names each
+connection by its port, so its JSON contains every game port. The generators
+are published with example ports in `scripts/grafana/queries.py`, and the
+generated `*.json` is in `.gitignore`. Same reasoning as the blurred screenshots
+above: an internal game port is a strong hint at an external one.
+
+**Screenshots of the Security and Games dashboards need the most care of any.**
+Their whole purpose is to show addresses, and one of those addresses can be
+mine: opening the website from a phone on mobile data to test it puts that
+phone's public address on the map and in the live feed. Before committing such
+a screenshot: blur every IP address and the live feed entirely; countries,
+counts and the map at world zoom are fine. The same goes for the router section
+(no WAN address, no firmware version: the router *is* internet-facing).
+
+The credentials this work created (a Telegram bot token and chat ID, a router
+user, a read-only Proxmox token, a Pterodactyl API key, an AMP login) live in
+`*.env` files with mode 600 next to the compose files, and every one has an
+`*.env.example` with placeholders here.
+
 ### What this section is really for
 
 Both calls could have gone the other way. What matters is that the rule was

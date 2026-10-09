@@ -68,8 +68,24 @@ and the story of doing it for real is
 |---|---|---|
 | 05 | [Glance dashboard](05-glance-dashboard.md) | 15 min |
 | 07 | [Nextcloud](07-nextcloud.md) — *planned, not yet deployed* | 60 min |
-| 10 | [Prometheus, Grafana and the exporters](10-monitoring-stack.md) | 45 min |
 | 20 | [qBittorrent behind gluetun on the NAS](20-qbittorrent-behind-gluetun.md) | 30 min |
+
+### Monitoring, logs and alerts
+
+Run these **in order**; each builds on the one before. The concepts are in
+[`docs/08`](../docs/08-monitoring.md), [`docs/23`](../docs/23-logs-and-security-monitoring.md)
+and [`docs/24`](../docs/24-alerting.md), and the story of building it is
+[the October report](../docs/reports/2026-10-08-monitoring-security-alerting.md).
+
+| | Runbook | Time |
+|---|---|---|
+| 10 | [Prometheus, Grafana and the exporters](10-monitoring-stack.md) — every node, the Pi, the NAS, the Proxmox API | 60-90 min |
+| 21 | [Logs: Loki, Alloy, the firewall log and CrowdSec](21-logs-and-crowdsec.md) | 45-60 min |
+| 22 | [The real visitor IP behind a Cloudflare tunnel](22-real-visitor-ip-behind-a-tunnel.md) | 15 min |
+| 23 | [Alerts to Telegram](23-alerts-to-telegram.md) | 30 min |
+| 24 | [FRITZ!Box monitoring](24-fritzbox-monitoring.md) | 15 min |
+| 25 | [Game server monitoring (AMP + Pterodactyl)](25-game-server-monitoring.md) | 30 min |
+| 26 | [Test dashboard and alert changes before they go live](26-test-grafana-changes-safely.md) — **before every change** | 5-15 min |
 
 ### Operations
 

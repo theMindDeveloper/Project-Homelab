@@ -1,0 +1,29 @@
+# Routing: everything -> Telegram. Critical + game = any time. Warning = not at night (23:00-08:00 Berlin).
+# Same problem is repeated at most every 4 h. A "resolved" message comes when it's fixed.
+apiVersion: 1
+policies:
+  - orgId: 1
+    receiver: telegram
+    group_by: ["alertname", "node"]
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 4h
+    routes:
+      - receiver: telegram-games         # game servers: any time, no "OK again"
+        object_matchers:
+          - ["severity", "=", "game"]
+        group_by: ["alertname", "server"]
+      - receiver: telegram
+        object_matchers:
+          - ["severity", "=", "warning"]
+        mute_time_intervals: ["night"]
+muteTimes:
+  - orgId: 1
+    name: night
+    time_intervals:
+      - times:
+          - start_time: "23:00"
+            end_time: "24:00"
+          - start_time: "00:00"
+            end_time: "08:00"
+        location: Europe/Berlin

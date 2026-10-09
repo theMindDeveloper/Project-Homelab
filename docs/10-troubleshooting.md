@@ -445,6 +445,77 @@ event.
 
 ---
 
+## Monitoring and alerts
+
+### A Grafana panel says "No data"
+
+Work from the bottom up:
+
+1. **Prometheus → Status → Targets.** Is the job UP? DOWN means the exporter
+   is not running, the address is `localhost` (the Prometheus container itself),
+   or a firewall/listen address blocks it. "connection refused" from a container
+   exporter usually means it listens on `127.0.0.1` only (fritz-exporter 3.x does
+   by default).
+2. **Run the panel's query in Explore.** Nothing back with a time range of
+   "last 5 minutes" but data for "last 24 hours" = the thing is simply quiet now
+   (no game running, no failed logins).
+3. **Data that only exists sometimes** is normal: player counts while a game
+   runs, guests only on Proxmox nodes, pressure only on kernels that report it.
+4. `scripts/grafana/check_dashboards.py` runs every query of every dashboard and
+   lists errors and empty panels in one go.
+
+### Every number on a Proxmox dashboard appears three times
+
+pve-exporter is asked for the whole cluster by every node. Ask one node for the
+cluster data (`cluster=1`) and each node only for its own extras (`node=1`).
+→ [compose/monitoring/prometheus/prometheus.yml](../compose/monitoring/prometheus/prometheus.yml)
+
+### A bar chart from Loki shows one bar with no name
+
+Loki returned one table, not one series per item. Set the panel to show all
+values (`reduceOptions.values: true`). → [Dashboards as code](25-dashboards-as-code.md#the-grafana-traps)
+
+### The world map is covered in "API KEY REQUIRED"
+
+The default basemap (CARTO) needs a key now. Use `osm-standard` or an XYZ tile
+layer that needs none. → [Dashboards as code](25-dashboards-as-code.md#the-default-map-needs-an-api-key)
+
+### The firewall panels show 0 game connections
+
+OPNsense logs internet game traffic on the DMZ side (`iface="vtnet1",
+dir="out"`), not on WAN. And the games may simply be off.
+→ [Logs and security monitoring](23-logs-and-security-monitoring.md#2--the-opnsense-firewall-log)
+
+### No Telegram message arrived
+
+1. Grafana → Alerting → Alert rules: is the rule **Firing**, or only Pending
+   (waiting out its `for:`)?
+2. Is it a 🟠 warning between 23:00 and 08:00? Muted on purpose; it arrives at 08:00.
+3. Contact points → `telegram` → **Test**. "Unauthorized" = token wrong or
+   `alerting.env` not loaded; "chat not found" = wrong chat ID or the bot was
+   never messaged first.
+4. Is the internet down? Then the message is sent once it is back.
+
+### An alert fires all the time, or never
+
+| Symptom | Usual cause |
+|---|---|
+| never fires, even in a test | a comparison without `bool` (`< 1` instead of `< bool 1`) |
+| "internet down" when only the exporter died | `or vector(0)` in the rule |
+| fires right after deploying | the query already returns 1 today: check it in Explore |
+| fires every evening for a node you switch off | exclude that node, and gate its guests on the node's `up` |
+| rule state "Error", mentions `$$A` | alert-rule files take `$A` literally |
+
+→ [Alerting · The traps](24-alerting.md#the-traps)
+
+### The NAS says "Invalid configuration file" for a compose file
+
+UGOS rejects compose files that mount the host's root folder, and any compose
+file with a stray `$` (it reads it as a variable). Create the container in the
+UGOS image screens instead. → [Runbook 10](../runbooks/10-monitoring-stack.md#3--node_exporter-on-the-nas-ugos)
+
+---
+
 ## When you are properly stuck
 
 1. **Read the error again, slowly.** Out loud. The number of times the message

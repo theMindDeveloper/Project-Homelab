@@ -245,16 +245,27 @@ bypasses ufw.** A ufw rule denying a port that Docker has published does
 nothing. This surprises people badly and it is worth testing rather than
 assuming.
 
-### No intrusion detection, no log aggregation
+### Intrusion detection watches, it does not block (since October 2026)
 
-No CrowdSec, no fail2ban, no Loki, no centralised logs. Each host's journal
-stays on that host, which means a compromised host's logs are attacker-writable.
+Loki collects LXC 102's journal (SSH and every container, including the
+internet-facing website with the real visitor address) and the OPNsense
+firewall log. CrowdSec reads them and recognises brute force, scans and web
+exploits, **without a bouncer**: nothing is blocked yet, on purpose, until weeks
+of data show how often a ban would hit the wrong address. See
+[23 · Logs and security monitoring](23-logs-and-security-monitoring.md).
 
-### No alerting
+**Still missing:** the nodes', the Pi's and the NAS's own logins are not
+collected, so a brute force against the Proxmox web UI would go unseen, and
+each of those hosts' journals still stays on that host, attacker-writable.
 
-Prometheus collects, nothing notifies. A breach, like a disk filling, is
-discovered by looking. This is in the README's limitations and it is the single
-highest-value missing piece.
+### Alerting exists, with two blind spots (since October 2026)
+
+19 Grafana alert rules send to a Telegram bot: hosts down, disks filling, heat,
+DNS down, internet down, an exporter down, failed SSH logins, CrowdSec attacks,
+a new device on the network, stopped game servers. See [24 · Alerting](24-alerting.md).
+
+The blind spots: the alerting runs on P1, so **if P1 dies nothing reports it**,
+and messages leave through the same internet line they would report as down.
 
 ### No offsite backup, no encryption at rest
 
@@ -270,7 +281,7 @@ for a lab run in evenings.
 
 | # | Action | Why first |
 |---:|---|---|
-| 1 | **Alertmanager** | not knowing is worse than any single missing control |
+| 1 | ~~**Alerting**~~ | done October 2026 ([24 · Alerting](24-alerting.md)); remaining: an external "is P1 alive" check |
 | 2 | **2FA on Proxmox** | the API is root over everything; ten minutes of work |
 | 3 | **Delete the leftover IPv6 allow rule** | two minutes, and it currently routes around the block rule if IPv6 ever appears |
 | 4 | **Egress filtering out of the DMZ** | closes gap 2 above; an evening in the OPNsense rule editor, no hardware |
@@ -278,7 +289,7 @@ for a lab run in evenings.
 | 6 | **A subnet per service inside the DMZ** | closes gap 1 above |
 | 7 | **Managed switch and VLANs** | the correct answer to threat 2, and it also closes gap 3 |
 | 8 | **Host firewalls** | defence in depth once segmentation is physical |
-| 9 | **Log aggregation** | valuable, and the largest time investment |
+| 9 | **Log aggregation from every host** | LXC 102 and the firewall are done; the nodes, the Pi and the NAS are not |
 
 Items 3 and 4 moved to the top because they are cheap, they need no hardware,
 and they close gaps in a control that already exists. Fixing something you
