@@ -421,7 +421,8 @@ flowchart LR
 | **Never** | a Proxmox node shell, OPNsense, the NAS, the router's admin, Vaultwarden, Cloudflare |
 | **Workflow** | PR + change note (*what, where, apply, verify, undo, result*) → owner merges → a watcher script wakes the agent → it backs up, applies exactly the note, verifies, reports |
 | **Rules** | never change what was not asked; ask before anything big; never merge; never commit, print or ask for secrets in chat; every commit authored by the owner |
-| **Cost** | the watcher and the alerts run without the AI; it only wakes for a message or a merge |
+| **Cost** | the watcher and the alerts run without the AI; it only wakes for a message, a merge, or the weekly report |
+| **Weekly report** | Sunday evening: a read-only script collects 7 days of metrics, logs, alert history (Grafana, Viewer token) and open findings; the agent writes state, security and suggestions; the monitoring bot sends it |
 | **Weak spots** | written down, not hidden: the agent VM holds every key, `main` is not yet branch-protected, prompt injection through logs |
 
 Full architecture, access table, data flow and incidents:

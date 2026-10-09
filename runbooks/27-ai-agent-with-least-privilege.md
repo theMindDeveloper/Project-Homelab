@@ -149,6 +149,7 @@ For every app the agent should manage, an account of its own, never yours:
 | AMP | its own user and role | a role with only what it needs (this lab chose broad, and says so) |
 | Nginx Proxy Manager | a non-admin user | "manage" for proxy hosts only; certificates "view" |
 | anything with read-only tokens (WUD, ...) | read-only token | |
+| Grafana (only if the agent should read alerts) | **service account**, role **Viewer**, one token | Viewer cannot change anything; test it: a `POST /api/folders` with the token must return 403 |
 
 Secrets go to **one folder on the agent VM, one file per system, mode 600**:
 
@@ -255,6 +256,30 @@ Two lessons from running it:
   for backup files of a previous apply before starting.
 - **Check the PR state before pushing to it.** A PR merged a minute ago is gone;
   a push to its branch never reaches `main`.
+
+### Optional: a weekly report
+
+Same idea as the watcher: a script does the collecting, the model only writes.
+
+1. Write a **read-only collector** that prints plain text: uptime, disk growth,
+   logins and blocked connections from the logs, the open findings. Test it by
+   hand first.
+2. Grafana → *Administration → Users and access → Service accounts → Add* →
+   role **Viewer** → *Add service account token*. Hand the token over the
+   no-chat way (above).
+3. Schedule it in an **isolated** session, so it does not see your chats:
+
+```bash
+openclaw automations add \
+  --name "weekly-homelab-report" \
+  --cron "0 18 * * 0" --tz "Europe/Berlin" \
+  --session isolated \
+  --message "Run the collector, write a short report (state, security, suggestions), send it. Change nothing." \
+  --announce
+```
+
+Limit that job to the tools it needs (read, write, exec) and let it send through
+your **alert bot** if you want everything in one chat.
 
 ---
 
