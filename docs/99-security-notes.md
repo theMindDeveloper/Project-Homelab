@@ -132,6 +132,17 @@ user, a read-only Proxmox token, a Pterodactyl API key, an AMP login) live in
 `*.env` files with mode 600 next to the compose files, and every one has an
 `*.env.example` with placeholders here.
 
+### The AI agent's access is published, its keys are not
+
+[docs/26](26-ai-agent-devops.md) publishes the agent's whole access model: which
+machines, which roles, which rights, and the weak spots. That is design, and the
+point of publishing it is that someone else can copy the model. The agent's
+**public** SSH key appears in a report, which is safe by design: it only lets a
+key *in*, and only from one LAN address.
+
+Never published: the agent's private key, its API tokens, its chat bot's name
+and token, any chat ID, and the content of its credential files.
+
 ### What this section is really for
 
 Both calls could have gone the other way. What matters is that the rule was
