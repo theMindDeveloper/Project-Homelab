@@ -22,7 +22,7 @@ documented so the whole thing can be rebuilt from this repository alone.**
 **3 nodes · 12 CPU cores · 64 GB RAM · 6 LXC guests + 1 VM · 2 networks · 16 proxied hostnames · 33 W**
 
 [Architecture](#architecture) · [Hardware](#the-hardware) ·
-[Services](#services) · [Monitoring](#monitoring) · [Wiki](docs/) · [Runbooks](runbooks/) ·
+[Services](#services) · [Monitoring](#monitoring) · [AI agent](#operations-an-ai-agent-with-least-privilege) · [Wiki](docs/) · [Runbooks](runbooks/) ·
 [Limitations](#known-limitations)
 
 </div>
@@ -36,9 +36,9 @@ The design goal is that the lab could be rebuilt from this repository alone.
 
 | | Contents |
 |---|---|
-| **[`docs/`](docs/)** | A 25-page technical reference: Docker, Docker Compose, LXC versus VM, Proxmox, storage and thin provisioning, networking, DNS and TLS, backup and recovery, Linux administration, troubleshooting, hardening, a nine-page sequence on network segmentation, bridges, NAT, firewalls, OPNsense and FreeBSD, and a four-page sequence on monitoring, security logs, alerting and dashboards as code. |
+| **[`docs/`](docs/)** | A 26-page technical reference: Docker, Docker Compose, LXC versus VM, Proxmox, storage and thin provisioning, networking, DNS and TLS, backup and recovery, Linux administration, troubleshooting, hardening, a nine-page sequence on network segmentation, bridges, NAT, firewalls, OPNsense and FreeBSD, a four-page sequence on monitoring, security logs, alerting and dashboards as code, and the architecture of the AI agent that operates the lab. |
 | **[`docs/reports/`](docs/reports/)** | Dated write-ups of changes large enough to have a story, including what broke. |
-| **[`runbooks/`](runbooks/)** | 24 step-by-step procedures, each with prerequisites, verification and rollback: creating containers, deploying services, cluster operations, building and sealing the DMZ, monitoring every machine, collecting logs, alerting to Telegram, backup restore drills and full disaster recovery. |
+| **[`runbooks/`](runbooks/)** | 25 step-by-step procedures, each with prerequisites, verification and rollback: creating containers, deploying services, cluster operations, building and sealing the DMZ, monitoring every machine, collecting logs, alerting to Telegram, giving an AI agent least-privilege access, backup restore drills and full disaster recovery. |
 | **[`compose/`](compose/)** | 14 Docker Compose stacks covering every containerised service, published as templates with credentials externalised, including the full monitoring, logging and alerting configuration. |
 | **[`scripts/`](scripts/)** | Operational tooling: container provisioning, Docker installation, backup automation, health checking, a secret scanner that runs pre-commit and in CI, and the generators and checker for the Grafana dashboards and alert rules. |
 | **[`diagrams/`](diagrams/)** | The full architecture diagram, with editable draw.io source. |
@@ -395,6 +395,41 @@ assume, and there is now an alert above 85 °C.*
 
 ---
 
+## Operations: an AI agent with least privilege
+
+Most of the editing work in this lab (configs, dashboards, alert rules, checks,
+these docs) is done by an **AI agent**, [OpenClaw](https://docs.openclaw.ai) on
+VM 103. It **proposes, a human decides**: every change is a pull request with a
+written plan, nothing touches a machine before it is merged, and findings are
+written down instead of "fixed".
+
+```mermaid
+flowchart LR
+    H["Owner<br/>Telegram · browser"] <--> A["AI agent<br/>VM 103"]
+    A -- "PR + change note" --> G["GitHub<br/>private config repo"]
+    H -- "reads diff, merges" --> G
+    W["merge-watcher<br/>script, every 2 min"] -- "merged? wake" --> A
+    A -- "own SSH user, sudo" --> M["LXC 102 · Pi · 3 DMZ containers"]
+    A -- "narrow API role" --> P["Proxmox API"]
+    A -- "own accounts" --> APPS["game panels · proxy"]
+    A -. "no access" .-> X["node shells · OPNsense · NAS<br/>router admin · Vaultwarden"]
+```
+
+| | |
+|---|---|
+| **Identity** | its own everywhere: user `openclaw` with one SSH key valid only from VM 103; Proxmox role `OpenClaw` (see, power, snapshots; no create/delete/config); own non-admin app accounts |
+| **Never** | a Proxmox node shell, OPNsense, the NAS, the router's admin, Vaultwarden, Cloudflare |
+| **Workflow** | PR + change note (*what, where, apply, verify, undo, result*) → owner merges → a watcher script wakes the agent → it backs up, applies exactly the note, verifies, reports |
+| **Rules** | never change what was not asked; ask before anything big; never merge; never commit, print or ask for secrets in chat; every commit authored by the owner |
+| **Cost** | the watcher and the alerts run without the AI; it only wakes for a message or a merge |
+| **Weak spots** | written down, not hidden: the agent VM holds every key, `main` is not yet branch-protected, prompt injection through logs |
+
+Full architecture, access table, data flow and incidents:
+[docs/26 · The AI agent](docs/26-ai-agent-devops.md). Set it up yourself:
+[runbook 27](runbooks/27-ai-agent-with-least-privilege.md).
+
+---
+
 ## Power
 
 <div align="center">
@@ -437,6 +472,7 @@ asked for.
 | 23 | [Logs and security monitoring](docs/23-logs-and-security-monitoring.md) | Loki, Alloy, the firewall log, GeoIP, CrowdSec watch-only, no country blocking |
 | 24 | [Alerting](docs/24-alerting.md) | Grafana rules to Telegram, quiet hours, and seven ways an alert can lie |
 | 25 | [Dashboards as code](docs/25-dashboards-as-code.md) | generated Grafana dashboards, and the Grafana traps |
+| 26 | [The AI agent](docs/26-ai-agent-devops.md) | where it runs, what it can and cannot reach, how a change travels, the weak spots |
 | 99 | [Security notes](docs/99-security-notes.md) | what this repository publishes, and what it never will |
 
 ### The runbooks — [`runbooks/`](runbooks/)
@@ -463,6 +499,7 @@ asked for.
 | 24 | [FRITZ!Box monitoring](runbooks/24-fritzbox-monitoring.md) | 15 min |
 | 25 | [Game server monitoring](runbooks/25-game-server-monitoring.md) | 30 min |
 | 26 | [Test dashboard and alert changes safely](runbooks/26-test-grafana-changes-safely.md) | 5-15 min |
+| 27 | [An AI agent with least privilege](runbooks/27-ai-agent-with-least-privilege.md) | an evening |
 
 **Start with [Runbook 02](runbooks/02-portainer-on-a-new-lxc.md)** if you read
 one thing. It goes from an empty Proxmox node to a service in a browser with a
@@ -486,10 +523,12 @@ docs/                        the wiki: what things are and why
   13 .. 20                     addressing, bridges, NAT, firewalls, OPNsense, FreeBSD
   21, 22                       encrypted DNS, VPNs and kill switches
   08, 23 .. 25                 monitoring, security logs, alerting, dashboards as code
+  26                           the AI agent: access, workflow, weak spots
   reports/                     dated write-ups of large changes, including what broke
 runbooks/                    step-by-step procedures
   12 .. 18                     build the DMZ, seal it, and recover it
   10, 21 .. 26                 monitoring, logs, alerts, router, game servers, testing
+  27                           give an AI agent least-privilege access
 compose/
   <service>/
     docker-compose.example.yml
@@ -603,6 +642,11 @@ a repository that lists only strengths is not documentation.
 - **Provisioning is manual.** Containers are created by hand or by a shell
   script. Ansible or Terraform with the Proxmox provider is the obvious next
   step, and the scripts here are *consistency*, not infrastructure as code.
+- **The AI agent's VM holds every key it uses.** Root inside five machines,
+  power and snapshot rollback on every guest, write access to the repositories.
+  It is LAN-only and its SSH key only works from its own address, but whoever
+  owns VM 103 owns all of that. And `main` is not branch-protected yet, so
+  "the agent never merges" is a rule, not a lock. See [docs/26](docs/26-ai-agent-devops.md#the-weak-spots-honestly).
 - **No UPS.** A power cut is an unclean shutdown for all four machines at once.
 
 The threat model that determines which of these matter, and the order in which

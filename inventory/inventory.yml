@@ -174,7 +174,8 @@ guests:
     os: ubuntu-26.04-live-server
     network: lan
     address: 192.168.178.91
-    purpose: hosts the Hermes and Openclaw agent dashboards
+    purpose: the AI agent that operates the lab (OpenClaw) - docs/26-ai-agent-devops.md
+    resources: {vcpu: 4, ram_gb: 5, disk_gb: 30}
 
   - vmid: 108
     name: omada
@@ -462,6 +463,17 @@ game_servers:
   - {name: minecraft,       manager: Pterodactyl, host: 10.10.10.20, network: dmz, state: on-demand}
   - {name: space-engineers, manager: AMP,         host: 10.10.10.21, network: dmz, state: on-demand}
   - {name: terraria,        manager: AMP,         host: 10.10.10.21, network: dmz, state: on-demand}
+
+# The AI agent's access (docs/26). Its own identity everywhere; verified 2026-10-09.
+agent:
+  runtime: OpenClaw on vm-103, model in the cloud, channels Telegram + LAN web UI
+  ssh_user: openclaw              # one ed25519 key, from="192.168.178.91" on every host
+  ssh_hosts: [lxc-102, pi, lxc-105, lxc-106, lxc-107]   # sudo + docker inside each
+  proxmox: {token: "openclaw@pve!agent", role: OpenClaw, privs: [VM.Audit, VM.PowerMgmt, VM.Snapshot, VM.Snapshot.Rollback, Datastore.Audit, Sys.Audit, Pool.Audit, SDN.Audit]}
+  apps: [AMP (own user), Pterodactyl (subuser, IP-limited key), Nginx Proxy Manager (non-admin), WUD (read-only)]
+  github: fine-grained token; PRs only, owner merges; main not yet branch-protected
+  no_access: [proxmox node shells, opnsense, nas, fritzbox admin, vaultwarden, cloudflare]
+  workflow: "PR + change note -> owner merges -> merge-watcher (script, every 2 min) wakes agent -> backup, apply, verify, report"
 
 alerting:
   engine: Grafana alerting           # not Alertmanager: several rules need Loki

@@ -274,6 +274,25 @@ theft of the NAS takes the Vaultwarden database.
 
 ---
 
+### The AI agent is an asset and a target (since October 2026)
+
+An AI agent on VM 103 operates the lab through its own narrow accounts
+([26 · The AI agent](26-ai-agent-devops.md)). For this page that means two things.
+
+**It is a new high-value target.** VM 103 holds every key the agent uses: root
+inside five machines, power and snapshot rollback on every guest, write access to
+the repositories. It is LAN-only and the SSH key is bound to its address, so the
+practical threat is the same as for any LAN machine (threat 2), with a bigger
+prize.
+
+**It reads untrusted text.** Website and firewall logs, web pages and game
+console output are written by strangers. An instruction hidden in a log line is
+treated as data, and nothing the agent does reaches a machine without a merged
+pull request, which is the control that matters. `main` is not yet
+branch-protected, so today that gate is a rule the agent follows, not a lock.
+
+---
+
 ## The order I would fix these in
 
 Ranked by risk reduced per hour spent, which is the only ranking that matters
@@ -289,6 +308,7 @@ for a lab run in evenings.
 | 6 | **A subnet per service inside the DMZ** | closes gap 1 above |
 | 7 | **Managed switch and VLANs** | the correct answer to threat 2, and it also closes gap 3 |
 | 8 | **Host firewalls** | defence in depth once segmentation is physical |
+| 8b | **Branch protection on `main`** | turns "the agent never merges" from a rule into a lock; five minutes |
 | 9 | **Log aggregation from every host** | LXC 102 and the firewall are done; the nodes, the Pi and the NAS are not |
 
 Items 3 and 4 moved to the top because they are cheap, they need no hardware,

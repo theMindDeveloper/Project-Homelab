@@ -70,12 +70,16 @@ which is why "root in a container" is much weaker than root on the host.
 memory, I/O. Namespaces control what it can *see*; cgroups control what it can
 *consume*.
 
+**Change note** — the file every pull request in the config repository carries (`changes/YYYY-MM-DD-name.md`): what, where, the exact apply commands, how to verify, how to undo, and the result. It is what makes "merge = apply" safe to automate. → [The AI agent](26-ai-agent-devops.md#how-a-change-travels)
+
 **Cloudflare Tunnel** — an outbound connection from your network to Cloudflare,
 down which they send requests for a published hostname. Publishes a service with
 **no inbound firewall rule**. Cloudflare terminates TLS and can see the
 plaintext, which is the trade.
 
 **Compose** → [Docker Compose](02-docker-compose.md)
+
+**Condition script (OpenClaw)** — a small script an automation runs on its schedule *without* calling the AI model; only when it returns `fire: true` is the agent woken. The merge-watcher is one. → [runbook 27](../runbooks/27-ai-agent-with-least-privilege.md#9--the-merge-watcher)
 
 **Conditional upstream**: an AdGuard line like `[/fritz.box/]192.168.178.1`:
 names under that domain go to a specific server instead of the normal upstream.
@@ -137,6 +141,8 @@ Usually a container cap that disagrees with an application-level limit inside it
 
 **`filterlog`** — OPNsense's packet-filter log: one CSV line per logged packet (rule, interface, action, direction, protocol, addresses, ports). → [Logs and security monitoring](23-logs-and-security-monitoring.md)
 
+**Fine-grained token (GitHub)** — a personal access token limited to chosen repositories and permissions, unlike a classic token that reaches everything the account can. → [runbook 27](../runbooks/27-ai-agent-with-least-privilege.md)
+
 **FreeBSD** — a Unix operating system with its own kernel, not a Linux
 distribution. OPNsense runs on it, which is why OPNsense cannot be an LXC
 container on a Linux host. → [FreeBSD basics](18-freebsd-basics.md)
@@ -168,6 +174,8 @@ Diagnose with `df -i`.
 so a dropped tunnel does not silently fall back to the real connection. The
 strongest version is having no other network at all.
 
+**Least privilege** — give an identity exactly the rights its job needs and nothing more, so a mistake or a stolen key can only do that much. The agent's whole access model is built on it. → [The AI agent](26-ai-agent-devops.md)
+
 **LogQL** — Loki's query language: a label selector, then filters and parsers, optionally wrapped in counting functions. → [Logs and security monitoring](23-logs-and-security-monitoring.md#logql-the-parts-actually-used)
 
 **Loki** — the log database. Indexes only labels, keeps the rest as text and structured metadata, 30 days here. → [Logs and security monitoring](23-logs-and-security-monitoring.md)
@@ -179,6 +187,8 @@ cluster is one. → [LXC or VM](04-lxc-vs-vm.md)
 **LVM-thin** — Proxmox's default block storage. Supports snapshots and thin
 provisioning. When the pool fills, **every guest on it goes read-only at once**,
 and `df` inside the guests will not have warned you. → [Storage](06-storage.md)
+
+**Merge-watcher** — the automation that checks every two minutes whether a pull request was merged, and only then wakes the agent to apply it. Costs nothing while idle. → [The AI agent](26-ai-agent-devops.md#how-a-change-travels)
 
 **`mod_remoteip`** — Apache module that replaces the connecting address with the real client address from a proxy header, if the proxy is trusted. Here: `CF-Connecting-IP` from the Cloudflare tunnel. → [runbook 22](../runbooks/22-real-visitor-ip-behind-a-tunnel.md)
 
@@ -225,6 +235,8 @@ on a different physical host and its machine fingerprint changes. Fixed with
 chooses by size, not by guilt, so the victim is often not the culprit. Found in
 `dmesg -T | grep -i "killed process"`.
 
+**OpenClaw** — the open-source agent runtime on VM 103: it holds the conversations, runs the agent's tools (shell, Git, SSH), schedules jobs and connects Telegram and the web UI. The model itself runs at the provider. → [The AI agent](26-ai-agent-devops.md)
+
 **OPNsense** — a FreeBSD-based firewall and router distribution with a web GUI
 over `pf`. VM 200 in this lab, and the only virtual machine in an otherwise
 LXC-only cluster. → [OPNsense concepts](17-opnsense-concepts.md)
@@ -243,6 +255,8 @@ equivalent to root on the host.
 
 **Prometheus** — a time-series database that **pulls**. It scrapes targets on a
 schedule; nothing pushes to it. → [Monitoring](08-monitoring.md)
+
+**Prompt injection** — text that tries to give an AI agent instructions while posing as data, e.g. a web page or a log line written by a stranger. The defence here is that external content is treated as data, and a human merges every change. → [The AI agent](26-ai-agent-devops.md#the-weak-spots-honestly)
 
 **Provisioning (Grafana)** — configuration loaded from files at start: data sources, dashboards, alert rules, contact points. A rebuilt Grafana needs no clicking. → [Dashboards as code](25-dashboards-as-code.md)
 

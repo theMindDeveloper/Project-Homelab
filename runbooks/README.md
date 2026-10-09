@@ -87,6 +87,14 @@ and [`docs/24`](../docs/24-alerting.md), and the story of building it is
 | 25 | [Game server monitoring (AMP + Pterodactyl)](25-game-server-monitoring.md) | 30 min |
 | 26 | [Test dashboard and alert changes before they go live](26-test-grafana-changes-safely.md) — **before every change** | 5-15 min |
 
+### The AI agent
+
+| | Runbook | Time |
+|---|---|---|
+| 27 | [An AI agent with least privilege](27-ai-agent-with-least-privilege.md) — own accounts, PRs, merge = apply | an evening |
+
+Why it is built this way: [`docs/26`](../docs/26-ai-agent-devops.md).
+
 ### Operations
 
 | | Runbook | Time |
