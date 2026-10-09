@@ -51,6 +51,19 @@ network, because then a compromised website is one HTTP request away from the
 Proxmox token. Give the monitoring containers their own network (the compose
 examples do: `networks: [monitoring]`).
 
+Check that the separation really holds (run on the Docker host; the names are
+from this lab, the project is called `stacks`):
+
+```bash
+docker network inspect stacks_default -f '{{range .Containers}}{{.Name}} {{end}}'
+# -> only the website, the tunnel connector and FTP
+docker exec stacks-webserver-1 getent hosts pve-exporter loki
+# -> prints nothing: the website cannot even find them by name
+```
+
+Moving the containers to the new network recreates them (`docker compose up -d`);
+the data volumes stay, and monitoring is blind for about a minute.
+
 **Anyone on the LAN can send syslog to UDP 1514.** Alloy cannot check who sent
 a line, so a device on the LAN could inject fake firewall lines (fake visitors
 on the map, a fake CrowdSec alert). Low impact for a watch-only setup; a host
