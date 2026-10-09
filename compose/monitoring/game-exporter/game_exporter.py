@@ -16,13 +16,14 @@ If a panel can't be reached (pve2 switched off), its servers are simply left out
 Only Python's standard library. Config via environment (see game-exporter.env, not in Git).
 """
 import json, os, time, urllib.parse, urllib.request, urllib.error
+from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 AMP_URL = os.environ.get("AMP_URL", "").rstrip("/")          # e.g. http://10.10.10.21:8080
 AMP_USER, AMP_PASS = os.environ.get("AMP_USER", ""), os.environ.get("AMP_PASS", "")
 PTERO_URL = os.environ.get("PTERO_URL", "").rstrip("/")      # e.g. http://10.10.10.22
 PTERO_KEY = os.environ.get("PTERO_KEY", "")
-TIMEOUT = 10
+TIMEOUT = 4      # per request; a dead panel must not make the whole scrape time out
 UA = "homelab-game-exporter/1"   # the panel blocks Python's default user agent
 
 # AMP AppState numbers -> words (from AMP's API docs)
@@ -114,11 +115,14 @@ def collect():
     lines = ["# HELP game_server_up 1 = game server running and ready.", "# TYPE game_server_up gauge",
              "# HELP game_server_state Current state of the game server (value 1).", "# TYPE game_server_state gauge",
              "# HELP game_exporter_api_up 1 = panel API answered.", "# TYPE game_exporter_api_up gauge"]
-    for platform, fn, enabled in (("amp", amp_servers, AMP_URL), ("pterodactyl", ptero_servers, PTERO_URL)):
-        if not enabled:
-            continue
+    panels = [(p, fn) for p, fn, enabled in (("amp", amp_servers, AMP_URL), ("pterodactyl", ptero_servers, PTERO_URL)) if enabled]
+    # Ask both panels at the same time: one dead panel (container stopped, node off) costs at most a few
+    # seconds and only marks THAT panel down, instead of timing out the whole scrape.
+    with ThreadPoolExecutor(max_workers=len(panels) or 1) as pool:
+        futures = {p: pool.submit(fn) for p, fn in panels}
+    for platform, fut in futures.items():
         try:
-            servers = fn()
+            servers = fut.result()
             lines.append(f'game_exporter_api_up{{platform="{platform}"}} 1')
         except Exception as e:  # panel down / pve2 off / timeout
             lines.append(f'game_exporter_api_up{{platform="{platform}"}} 0')
@@ -150,6 +154,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, *args):
         pass  # no access log spam
+
+    def handle(self):
+        try:
+            super().handle()
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # Prometheus gave up waiting; nothing to report
 
 
 if __name__ == "__main__":
