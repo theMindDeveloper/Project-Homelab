@@ -111,7 +111,7 @@ flowchart LR
 | **Pterodactyl** | non-admin user, **subuser** on the game servers; client API key limited to VM 103's address | start/stop, console, files, backups of those servers | the panel's admin area (verified: HTTP 403) |
 | **Nginx Proxy Manager** | own non-admin user | manage proxy hosts and redirects, view certificates | users, settings, certificate private keys |
 | **WUD** (image update checker) | read-only tokens | read | anything else |
-| **GitHub** | fine-grained token on the owner's account | branches and pull requests on the owner's repositories | (by rule, not by force) merge, or push to `main`. See the weak spots |
+| **GitHub** | fine-grained token on the owner's account | branches and pull requests on the owner's repositories (technically also push to `main` and merge) | change repository settings (GitHub refuses: 403). Merging and pushing to `main` it does not do, by rule; see the weak spots |
 | **Monitoring logins** | copies of the read-only Proxmox exporter token, the router monitoring user, the alert bot, the game exporter key | apply and repair the monitoring | nothing beyond those (deliberately narrow, see [docs/24](24-alerting.md)) |
 | **OPNsense, NAS, FRITZ!Box admin, Vaultwarden, Cloudflare** | **none** | | changes there are done by the owner, from a click-guide the agent writes |
 
@@ -220,7 +220,7 @@ a cloud model, and it shapes the habits:
 |---|---|---|---|
 | **VM 103 is the crown jewel** | whoever owns it owns every key above: root in five machines, power and snapshot rollback on every guest, write access to every repository | LAN-only, nothing forwarded, keys bound to its address | fewer keys on it (drop the monitoring-login copies once applied), and a backup of it |
 | **`sudo` on five machines** | the agent is root inside each | each is an unprivileged container (or the Pi); Docker access is root-equivalent anyway | per-task users where Docker is not needed |
-| **GitHub token is admin, `main` is unprotected** | "never merge, never push to main" is a rule, not a lock | the rule, and every push is visible in the history | branch protection that requires a PR (with an exception for `REPORTS.md`), and a token limited to the two repositories |
+| **The GitHub token can push and merge, `main` is unprotected** | "never merge, never push to main" is a rule, not a lock | the rule, and every push is visible in the history | branch protection that requires a PR (with an exception for `REPORTS.md`), and a token limited to the two repositories |
 | **Snapshot rollback** | can throw away recent changes on a guest | needs the owner's explicit OK, by rule | |
 | **Prompt injection** | the agent reads text written by strangers: web pages, and now website and firewall logs (a user agent string is chosen by whoever sends the request) | OpenClaw marks external content as untrusted data, not instructions; the agent does not merge (a rule today, a lock once `main` is protected); dangerous actions need an explicit yes | keep the human merge gate, whatever else changes |
 | **Mistakes, not attacks** | the realistic risk is a wrong change, not a hacked agent | written plan per change, backup before apply, read-only verification, the owner reviews every diff | |
