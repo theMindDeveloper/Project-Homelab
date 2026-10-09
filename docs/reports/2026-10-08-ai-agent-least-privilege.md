@@ -133,6 +133,9 @@ The first look already paid for itself:
   The nightly job in [`docs/07`](../07-backup-and-recovery.md) is not actually
   running.
 - 🟠 **AdGuard has no login.** Anyone on the LAN could change DNS for the house.
+  *Update 2026-10-09: fixed. AdGuard now has a login, plus a separate user for
+  the exporter, and locks out after 5 wrong tries. The steps are in
+  [runbook 03](../../runbooks/03-adguard-home-dns.md#5--verify).*
 - 🟡 **The NAS is `.79`.** The NFS storage points there, which settles the
   `.49`/`.79` disagreement in these docs.
 - 🟡 **`check-secrets.sh` doesn't block in pre-commit mode.** Findings are

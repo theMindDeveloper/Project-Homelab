@@ -131,6 +131,10 @@ AdGuard Home resolves for every device. Blocks ad and tracker domains, and
 incidentally a good share of malware command-and-control domains, for devices
 that cannot run any security software of their own.
 
+Its admin UI has a login and locks out after 5 wrong tries. That matters more
+than it sounds: whoever controls DNS can send every device in the house to a
+fake site. → [AdGuard runbook](../runbooks/03-adguard-home-dns.md)
+
 ### Encrypted upstream DNS
 
 Since September 2026 AdGuard forwards to Quad9 over DoH and DoT instead of
