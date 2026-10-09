@@ -26,7 +26,7 @@ def rule(uid, title, expr, summary, desc, sev, for_="5m", ds=PROM, nodata="OK", 
                          "conditions": [{"evaluator": {"type": "gt", "params": [0]}}]})}]}
 
 CRIT = [
-    # pve2 + pve3 are switched off on purpose to save power -> no "down" alert for them.
+    # pve2 + pve3 are switched off on purpose to save power -> only a soft 🟠 "is off" message (see WARN).
     rule("host-down", "Host down", f'max by (node) (up{{{HOSTS}, node!~"pve2|pve3"}}) < bool 1',
          "{{ .Labels.node }} is DOWN", "Prometheus can't reach {{ .Labels.node }} for 2 minutes.", "critical", "2m"),
     rule("guest-stopped", "Guest with autostart stopped",
@@ -47,12 +47,15 @@ CRIT = [
          "Internet is DOWN (FRITZ!Box)", "The DSL/WAN link is down. You get this message once it's back.", "critical", "3m"),
 ]
 WARN = [
+    # pve2 + pve3: switched off on purpose to save power, but the user still wants to know (no 🔴, not at night).
+    rule("host-off", "Power-saving node off", 'max by (node) (up{job="proxmox-host", node=~"pve2|pve3"}) < bool 1',
+         "{{ .Labels.node }} is off", "Fine if you switched it off yourself. You get an OK message when it's back.", "warning", "2m"),
     rule("disk-80", "Disk over 80%", f'max by (node, mountpoint) (1 - node_filesystem_avail_bytes{{{HOSTS},{FS}}} / node_filesystem_size_bytes{{{HOSTS},{FS}}}) > bool 0.8',
          "{{ .Labels.node }} {{ .Labels.mountpoint }} is over 80% full", "Time to clean up.", "warning", "30m"),
     rule("storage-80", "Proxmox storage over 80%", 'max by (id) (pve_disk_usage_bytes{id=~"storage/.*"} / pve_disk_size_bytes{id=~"storage/.*"}) > bool 0.8',
          "Storage {{ .Labels.id }} is over 80% full", "Time to clean up.", "warning", "30m"),
     rule("disk-full-7d", "Disk full within 7 days", f'max by (node, mountpoint) (predict_linear(node_filesystem_avail_bytes{{{HOSTS},{FS},node!=""}}[6h], 7*86400) < bool 0)',
-         "{{ .Labels.node }} {{ .Labels.mountpoint }} will be full in < 7 days", "Based on the last 6 hours of growth.", "warning", "2h"),
+         "{{ .Labels.node }} {{ .Labels.mountpoint }} will be full within 7 days", "Based on the last 6 hours of growth.", "warning", "2h"),
     rule("ram-90", "RAM over 90%", f'max by (node) (1 - node_memory_MemAvailable_bytes{{{HOSTS}}} / node_memory_MemTotal_bytes{{{HOSTS}}}) > bool 0.9',
          "{{ .Labels.node }} RAM is over 90%", "For 15 minutes. Something uses too much memory.", "warning", "15m"),
     rule("crowdsec", "CrowdSec detected an attack", '(sum by (name) (increase(cs_bucket_overflowed_total[10m])) or vector(0)) > bool 0',
@@ -85,6 +88,11 @@ GAMES = [
          "{{ .Labels.server }} stopped ({{ .Labels.platform }})",
          "It was running and is not anymore. If you stopped it yourself, ignore this.", "game", "1m"),
 ]
+
+# Telegram uses parse_mode HTML: a "<" or "&" in a text makes Telegram reject the whole message (400 Bad Request).
+for r in CRIT + WARN + GAMES:
+    for t in r["annotations"].values():
+        assert "<" not in t and "&" not in t, f'{r["uid"]}: no "<" or "&" in alert texts (Telegram HTML)'
 
 doc = {"apiVersion": 1, "groups": [
     {"orgId": 1, "name": "critical", "folder": "Homelab", "interval": "1m", "rules": CRIT},

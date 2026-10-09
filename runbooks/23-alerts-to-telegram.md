@@ -79,8 +79,9 @@ Rules are written in [`scripts/grafana/gen_alerts.py`](../scripts/grafana/gen_al
 Read it once; each rule is one call with its query, message and `for`. Things
 that are specific to this lab and that you will want to change:
 
-- `node!~"pve2|pve3"` in "Host down": those two nodes are switched off on purpose.
-  Use your own names, or remove it.
+- `node!~"pve2|pve3"` in "Host down" and `node=~"pve2|pve3"` in "Power-saving node off":
+  those two nodes are switched off on purpose, so they get a soft 🟠 "is off" instead of 🔴.
+  Use your own names, or remove both.
 - `id!="lxc/101"` in "Guest with autostart stopped": one guest excluded on
   purpose. Remove it or put your own (with a comment saying why).
 - `node="pve2"` in "OPNsense stopped sending logs": the node the firewall runs on.
@@ -148,6 +149,7 @@ then "✅ OK again" for both once it is back.
 | rule shows "Error", message about `$$A` | `$$` written in a rule file: alert-rule files take `$A` literally, only contact points expand variables |
 | a rule never fires in a test | the query lacks `bool` (`< 1` instead of `< bool 1`), see docs/24 |
 | "internet down" when only the exporter died | `or vector(0)` in that rule, see docs/24 |
+| a rule fires (Alerting shows it) but no Telegram message; Grafana log says 400 "Unsupported start tag" | a `<` or `&` in the alert text (Telegram HTML). The generator refuses them now |
 | messages every evening for a switched-off node | exclude it from "Host down" and gate its guests on its `up`, see docs/24 |
 
 ---
