@@ -321,6 +321,31 @@ If only the `https://` line fails and `tls://` works, layers 1 and 2 are fine
 and it is port 443 or the HTTPS side. AdGuard keeps working on the other line in
 the meantime, which is one reason to keep two.
 
+### DNS over IPv6 to the Pi times out, IPv4 works
+
+Clients get the Pi's IPv6 address as DNS server, but queries to it time out.
+AdGuard is not the problem (host networking, it listens on IPv4 and IPv6). The
+Pi simply does not *have* that address:
+
+```bash
+ip -6 addr show eth0                          # only an fe80:: address = this
+cat /proc/sys/net/ipv6/conf/eth0/accept_ra    # 1 = ignored while forwarding
+```
+
+Tailscale turns on IPv6 forwarding, and with forwarding on Linux ignores router
+advertisements unless `accept_ra` is `2`. DietPi's Tailscale drop-in sets that
+only for `all`/`default`, which does not reach `eth0`. Fix, permanent:
+
+```bash
+echo 'net.ipv6.conf.eth0.accept_ra = 2' | sudo tee /etc/sysctl.d/99-eth0-accept-ra.conf
+sudo sysctl -w net.ipv6.conf.eth0.accept_ra=2
+```
+
+The addresses appear with the router's next advertisement, which can take a few
+minutes. No restart needed. Side effect: the Pi also gets a global IPv6 address
+and route, so it can use IPv6 outbound. Inbound from the internet stays blocked
+by the router.
+
 ### The password manager offers every login on every subdomain
 
 Bitwarden (and so Vaultwarden) matches logins by **base domain** by default. It
