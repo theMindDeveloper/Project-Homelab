@@ -28,7 +28,7 @@ services:
       - wud-internal
 
   wud:
-    image: getwud/wud:9.3.0
+    image: getwud/wud:9.4.1
     container_name: wud
     restart: unless-stopped
     depends_on:
