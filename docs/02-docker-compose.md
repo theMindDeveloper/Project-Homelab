@@ -355,7 +355,7 @@ Data survives because it lives in volumes and bind mounts, not in the
 container. The old image stays on disk until you prune it, which is also your
 quickest rollback: put the old tag back and `up -d` again.
 
-**Pin versions.** `image: grafana/grafana:13.1.3`, not `:latest`. With `latest`
+**Pin versions.** `image: grafana/grafana:13.2.3`, not `:latest`. With `latest`
 you can't tell what's running, `pull` may silently jump a major version, and
 no tool can tell you that something is "outdated", because `latest` is always
 "the newest".
