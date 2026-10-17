@@ -364,11 +364,11 @@ This lab splits the job between two tools, and neither one changes anything by
 itself:
 
 - **Renovate** (free bot, hosted by Mend) reads the compose files in the
-  private ops repo. When a newer **major or minor** version exists, it opens a
-  PR that changes the one `image:` line, with the release notes pasted in. It
-  runs on weekends, keeps a "Dependency Dashboard" issue, and never merges by
-  itself. Patch updates and Postgres are excluded; a database major upgrade
-  needs a dump and restore, not an image swap.
+  private ops repo. When a newer **major, minor or patch** version exists, it
+  opens a PR that changes the one `image:` line, with the release notes pasted
+  in. It runs on weekends, keeps a "Dependency Dashboard" issue, and never
+  merges by itself. Pin and digest updates are off. Postgres is excluded on
+  purpose; a database major upgrade needs a dump and restore, not an image swap.
   Merging the PR is the approval. The deploy is the three commands above,
   with a backup of the file first.
 - **WUD** (What's Up Docker, [compose/wud](../compose/wud/docker-compose.example.yml))
