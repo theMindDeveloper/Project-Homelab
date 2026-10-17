@@ -33,7 +33,7 @@ services:
 
   prometheus:
     networks: [monitoring]   # NOT the default network: see the note at the end
-    image: prom/prometheus:v3.13.2
+    image: prom/prometheus:v3.15.0
     restart: unless-stopped
     ports:
       - "9090:9090"
@@ -127,7 +127,7 @@ services:
   # with panel credentials when 150 readable lines do the job.
   game-exporter:
     networks: [monitoring]   # NOT the default network: see the note at the end
-    image: python:3.13.16-alpine
+    image: python:3.14.8-alpine
     restart: unless-stopped
     command: ["python", "-I", "/app/game_exporter.py"]
     user: "65534:65534"          # nobody: the script needs no rights at all
