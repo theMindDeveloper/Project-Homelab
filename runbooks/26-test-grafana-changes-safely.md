@@ -113,7 +113,7 @@ second, temporary Grafana of the **same version** with the new files and look.
 
 ```bash
 mkdir -p /tmp/gf && cd /tmp/gf
-curl -sL https://dl.grafana.com/oss/release/grafana-13.1.3.linux-amd64.tar.gz | tar xz
+curl -sL https://dl.grafana.com/oss/release/grafana-13.2.3.linux-amd64.tar.gz | tar xz
 cp -r /path/to/repo/compose/monitoring/grafana/provisioning prov
 mkdir -p data logs dash && cp /path/to/repo/compose/monitoring/grafana/dashboards/*.json dash/
 sed -i 's#/var/lib/grafana/dashboards#/tmp/gf/dash#' prov/dashboards/homelab.yml
@@ -129,8 +129,8 @@ provisioning = /tmp/gf/prov
 reporting_enabled = false
 check_for_updates = false
 EOF
-TELEGRAM_BOT_TOKEN=123:TEST TELEGRAM_CHAT_ID=1 setsid ./grafana-13.1.3/bin/grafana server \
-  --homepath /tmp/gf/grafana-13.1.3 --config /tmp/gf/test.ini > /tmp/gf/stdout.log 2>&1 < /dev/null &
+TELEGRAM_BOT_TOKEN=123:TEST TELEGRAM_CHAT_ID=1 setsid ./grafana-13.2.3/bin/grafana server \
+  --homepath /tmp/gf/grafana-13.2.3 --config /tmp/gf/test.ini > /tmp/gf/stdout.log 2>&1 < /dev/null &
 until curl -s http://127.0.0.1:13000/api/health | grep -q '"ok"'; do sleep 2; done; echo up
 ```
 
