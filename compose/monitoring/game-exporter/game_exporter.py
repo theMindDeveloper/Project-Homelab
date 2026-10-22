@@ -55,7 +55,8 @@ def _amp_call(method, payload):
             _amp_session = login.get("sessionID")
             if not _amp_session:
                 raise RuntimeError("AMP login failed")
-        res = _req(f"{AMP_URL}/API/{method}", {"SESSIONID": _amp_session, **payload})
+        # session goes in the Authorization header; SESSIONID in the body is deprecated (AMP 2.8 logs a warning per call)
+        res = _req(f"{AMP_URL}/API/{method}", payload, {"Authorization": f"Bearer {_amp_session}"})
         if isinstance(res, dict) and res.get("Title") == "Unauthorized Access" and attempt == 1:
             _amp_session = None          # session expired -> log in again once
             continue

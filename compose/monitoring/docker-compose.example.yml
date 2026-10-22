@@ -127,7 +127,7 @@ services:
   # with panel credentials when 150 readable lines do the job.
   game-exporter:
     networks: [monitoring]   # NOT the default network: see the note at the end
-    image: python:3.14.8-alpine
+    image: python:3.15.1-alpine
     restart: unless-stopped
     command: ["python", "-I", "/app/game_exporter.py"]
     user: "65534:65534"          # nobody: the script needs no rights at all
